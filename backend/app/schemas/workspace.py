@@ -4,7 +4,8 @@ Pydantic schemas for workspace validation
 """
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 from enum import Enum
 
 from ..models.workspace import WorkspacePlan, MemoryScope, EscalationPolicy

@@ -6,7 +6,7 @@ Handles CRUD operations for tasks
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select, count
+from sqlalchemy import select, func
 from sqlalchemy import or_, and_, desc
 from typing import List, Optional
 from datetime import datetime
@@ -25,7 +25,7 @@ from ..config.websocket import websocket_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(tags=["tasks"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 
@@ -73,7 +73,7 @@ async def list_tasks(
         result = await db.execute(
             select(Workspace.id).where(Workspace.user_id == user_id)
         )
-        workspace_ids = [row.id for row in result.scalars().all()]
+        workspace_ids = list(result.scalars().all())
         if workspace_ids:
             query = query.where(Task.workspace_id.in_(workspace_ids))
     
@@ -93,7 +93,7 @@ async def list_tasks(
     query = query.order_by(desc(Task.created_at))
     
     # Get total count
-    count_query = select(count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(query.subquery())
     result = await db.execute(count_query)
     total = result.scalar_one()
     
@@ -114,6 +114,13 @@ async def list_tasks(
                 agent_id=t.agent_id,
                 dependencies=t.dependencies,
                 result=t.result,
+                result_data=t.result_data,
+                estimated_duration=t.estimated_duration,
+                max_retries=t.max_retries,
+                retry_count=t.retry_count,
+                subtasks=t.subtasks or [],
+                completed_subtasks=t.completed_subtasks or [],
+                metadata=t.task_metadata,
                 tokens_used=t.tokens_used,
                 cost=t.cost,
                 started_at=t.started_at,
@@ -126,6 +133,7 @@ async def list_tasks(
                 is_in_progress=t.is_in_progress,
                 is_blocked=t.is_blocked,
                 has_dependencies=t.has_dependencies,
+                all_dependencies_complete=t.all_dependencies_complete,
             )
             for t in tasks
         ],
@@ -182,6 +190,13 @@ async def get_task(
         agent_id=task.agent_id,
         dependencies=task.dependencies,
         result=task.result,
+        result_data=task.result_data,
+        estimated_duration=task.estimated_duration,
+        max_retries=task.max_retries,
+        retry_count=task.retry_count,
+        subtasks=task.subtasks or [],
+        completed_subtasks=task.completed_subtasks or [],
+        metadata=task.task_metadata,
         tokens_used=task.tokens_used,
         cost=task.cost,
         started_at=task.started_at,
@@ -194,6 +209,7 @@ async def get_task(
         is_in_progress=task.is_in_progress,
         is_blocked=task.is_blocked,
         has_dependencies=task.has_dependencies,
+        all_dependencies_complete=task.all_dependencies_complete,
     )
 
 
@@ -298,6 +314,13 @@ async def create_task(
         agent_id=task.agent_id,
         dependencies=task.dependencies,
         result=task.result,
+        result_data=task.result_data,
+        estimated_duration=task.estimated_duration,
+        max_retries=task.max_retries,
+        retry_count=task.retry_count,
+        subtasks=task.subtasks or [],
+        completed_subtasks=task.completed_subtasks or [],
+        metadata=task.task_metadata,
         tokens_used=task.tokens_used,
         cost=task.cost,
         started_at=task.started_at,
@@ -310,6 +333,7 @@ async def create_task(
         is_in_progress=task.is_in_progress,
         is_blocked=task.is_blocked,
         has_dependencies=task.has_dependencies,
+        all_dependencies_complete=task.all_dependencies_complete,
     )
 
 
@@ -417,6 +441,13 @@ async def update_task(
         agent_id=task.agent_id,
         dependencies=task.dependencies,
         result=task.result,
+        result_data=task.result_data,
+        estimated_duration=task.estimated_duration,
+        max_retries=task.max_retries,
+        retry_count=task.retry_count,
+        subtasks=task.subtasks or [],
+        completed_subtasks=task.completed_subtasks or [],
+        metadata=task.task_metadata,
         tokens_used=task.tokens_used,
         cost=task.cost,
         started_at=task.started_at,
@@ -429,6 +460,7 @@ async def update_task(
         is_in_progress=task.is_in_progress,
         is_blocked=task.is_blocked,
         has_dependencies=task.has_dependencies,
+        all_dependencies_complete=task.all_dependencies_complete,
     )
 
 

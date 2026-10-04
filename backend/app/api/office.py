@@ -6,23 +6,24 @@ Handles real-time office state and WebSocket connections
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import Optional, Dict, Any
 import logging
 import json
 from datetime import datetime
 
-from ..models.agent import Agent
+from ..models.agent import Agent, AgentStatus
 from ..models.workspace import Workspace
 from ..models.user import User
 from ..schemas.office import OfficeState, OfficeStateResponse, OfficeConfig, OfficeUpdate, AgentStatusUpdate
 from ..services.auth import auth_service
 from ..services.orchestration import orchestration_service
-from ..config.database import get_db
+from ..config.database import get_db, AsyncSessionLocal
 from ..config.websocket import websocket_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/office", tags=["office"])
+router = APIRouter(tags=["office"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 

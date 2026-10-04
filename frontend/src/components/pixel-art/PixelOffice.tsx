@@ -2,15 +2,12 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CharacterType, 
-  AnimationStatus, 
   OfficeTheme,
   OfficeLayout,
   DecorationType,
   CHARACTERS,
-  ANIMATIONS,
   OFFICE_THEMES,
   DEFAULT_LAYOUT,
-  LARGE_LAYOUT,
   DECORATIONS,
   STATUS_ICONS,
   STATUS_LABELS,
@@ -18,8 +15,7 @@ import {
   agentStatusToAnimationStatus,
   getThemeConfig
 } from '../../types/pixel-art'
-import { PixelAgent, PixelAgentOptimized, PixelAgentGroup } from './PixelAgent'
-import { Agent } from '../../types'
+import { PixelAgent } from './PixelAgent'
 
 // ============================================
 // INTERFACES
@@ -273,11 +269,24 @@ const styles = {
     fontFamily: 'monospace',
   },
 
-  statItem: (value: string | number, label: string) => ({
+  statItem: (_value: string | number, _label: string) => ({
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center' as const,
   }),
+
+  // Barra de estado inferior (celda + tema + sync)
+  statusBar: {
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: '6px 12px',
+    fontSize: '10px',
+    fontFamily: 'monospace',
+    color: '#888',
+    borderTop: '1px solid #2A2A2A',
+    marginTop: '8px',
+  },
 
   statValue: {
     fontSize: '16px',
@@ -908,6 +917,13 @@ export const PixelOffice: React.FC<PixelOfficeProps> = ({
 
       {/* Feed de actividad */}
       {renderActivityFeed()}
+
+      {/* Barra de estado: celda + tema + última sync */}
+      <div style={styles.statusBar}>
+        <span>Celda {hoveredCell ? `${hoveredCell.x},${hoveredCell.y}` : '—'}</span>
+        <span>Tema {themeConfig.name}</span>
+        <span>sync {new Date(lastUpdate).toLocaleTimeString()}</span>
+      </div>
 
       {/* Efecto de parpadeo estilo GameBoy */}
       <motion.div

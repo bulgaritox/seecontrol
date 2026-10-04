@@ -87,14 +87,7 @@ class Workspace(Base, BaseModel):
     
     # Relationships
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    user: Mapped["User"] = relationship("User", back_populates="workspaces")
     
-    agents: Mapped[List["Agent"]] = relationship("Agent", back_populates="workspace")
-    tasks: Mapped[List["Task"]] = relationship("Task", back_populates="workspace")
-    skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="workspace")
-    missions: Mapped[List["Mission"]] = relationship("Mission", back_populates="workspace")
-    token_usages: Mapped[List["TokenUsage"]] = relationship("TokenUsage", back_populates="workspace")
-    webhooks: Mapped[List["Webhook"]] = relationship("Webhook", back_populates="workspace")
     
     def __repr__(self) -> str:
         return f"<Workspace(id={self.id}, name={self.name}, plan={self.plan.value})>"

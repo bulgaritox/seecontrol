@@ -4,9 +4,10 @@ Uses Pydantic Settings Management
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, AnyHttpUrl
-from typing import List, Optional
+from pydantic import Field, AnyHttpUrl, field_validator
+from typing import List, Optional, Union
 import os
+import json
 
 
 class Settings(BaseSettings):
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = "seecontrol123"
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 10
+    # Local dev fallback (Windows sin Postgres): true = SQLite local
+    USE_SQLITE: bool = False
     
     # Redis
     REDIS_HOST: str = "localhost"
@@ -48,6 +51,22 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
     ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v
     
     # LLM Providers - BYOK Configuration
     DEFAULT_PROVIDER: str = "anthropic"
@@ -80,6 +99,13 @@ class Settings(BaseSettings):
     # Custom endpoint
     CUSTOM_LLM_ENDPOINT: Optional[AnyHttpUrl] = None
     CUSTOM_LLM_API_KEY: Optional[str] = None
+
+    @field_validator("CUSTOM_LLM_ENDPOINT", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "REDIS_PASSWORD", mode="before")
+    @classmethod
+    def _empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
     
     # Orchestration
     MASTER_AI_MODEL: str = "claude-3-5-sonnet-20250620"
@@ -115,12 +141,6 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    
-    # Class config for Pydantic v2
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
 
 # Create settings instance

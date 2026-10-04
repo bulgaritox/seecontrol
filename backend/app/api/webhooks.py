@@ -6,7 +6,7 @@ Handles CRUD operations for webhooks
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select, count
+from sqlalchemy import select, func
 from sqlalchemy import or_, and_, desc
 from typing import List, Optional
 from datetime import datetime
@@ -34,7 +34,7 @@ from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+router = APIRouter(tags=["webhooks"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 
@@ -80,7 +80,7 @@ async def list_webhooks(
         result = await db.execute(
             select(Workspace.id).where(Workspace.user_id == user_id)
         )
-        workspace_ids = [row.id for row in result.scalars().all()]
+        workspace_ids = list(result.scalars().all())
         if workspace_ids:
             query = query.where(Webhook.workspace_id.in_(workspace_ids))
     
@@ -92,7 +92,7 @@ async def list_webhooks(
     query = query.order_by(desc(Webhook.created_at))
     
     # Get total count
-    count_query = select(count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(query.subquery())
     result = await db.execute(count_query)
     total = result.scalar_one()
     

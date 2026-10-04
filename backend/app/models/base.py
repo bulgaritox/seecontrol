@@ -4,10 +4,13 @@ Provides common fields and functionality for all models
 """
 
 from sqlalchemy.orm import DeclarativeBase, declared_attr, Mapped, mapped_column
-from sqlalchemy import DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, String, func
 from typing import Optional
 import uuid
+
+
+def _uuid_str() -> str:
+    return str(uuid.uuid4())
 
 
 class Base(DeclarativeBase):
@@ -22,7 +25,7 @@ class BaseModel:
     def __tablename__(cls) -> str:
         return cls.__name__.lower() + "s"
     
-    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

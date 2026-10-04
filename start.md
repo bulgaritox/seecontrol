@@ -2,6 +2,46 @@
 
 Plataforma de orquestación multi-agente con oficina virtual pixel-art estilo GameBoy Pokémon.
 
+## ✅ Setup verificado en Windows (Oct 2026)
+
+Backend en **PostgreSQL real** + frontend plataforma completa (Studio/Chat, Oficina en vivo,
+Kanban, Fatiga de tokens, BYOK Global+Asia). Servicios esperados arriba:
+
+| Servicio | URL / puerto |
+|---|---|
+| API + Docs | http://127.0.0.1:8000/docs |
+| Frontend | http://127.0.0.1:5173 |
+| PostgreSQL | localhost:5432 (BD `seecontrol`, usuario `seecontrol`) |
+
+```powershell
+# 1. PostgreSQL (cluster local en C:\Users\<tu>\pgdata)
+& 'C:\Program Files\PostgreSQL\16\bin\pg_ctl.exe' -D "$env:USERPROFILE\pgdata" -l "$env:USERPROFILE\pgdata\logfile.log" start
+
+# 2. Backend (crea las 8 tablas solo con arrancar)
+cd seecontrol-main\backend
+.\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+# USE_SQLITE=false en backend/.env = Postgres. Para volver a SQLite: USE_SQLITE=true
+
+# 3. Frontend
+cd ..\frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Usuario demo: `admin@seecontrol.io` / `admin123` (rol owner). Login por formulario
+OAuth2 (`username` + `password`) en `POST /api/users/login`. Los POST de colección
+usan trailing slash (`/api/agents/`, `/api/tasks/`, `/api/missions/`, `/api/skills/`).
+
+Bugs corregidos vs. repo original: doble prefijo de routers (`/api/users/users/...`),
+`TaskResponse` incompleto, helpers WS faltantes (`broadcast_mission_update`,
+`broadcast_office_state`, `broadcast_skill_update`, `broadcast_webhook_event`),
+imports ausentes (`select` en orchestration/token_manager/office, `AgentStatus`,
+`Task/TaskStatus/TaskPriority` en agents), `relationship()` sin FK, columna
+`metadata` reservada por SQLAlchemy (renombrada a `task_metadata`/`usage_metadata`
+mapeando la misma columna), `bcrypt==4.0.1` pineado, `PixelOffice` legacy con
+celdas debug `+x,y`, y entry points del frontend (`main.tsx`/`App.tsx`) inexistentes.
+
+---
+
 ## 📋 Requisitos Previos
 
 ### Backend (FastAPI)

@@ -75,9 +75,7 @@ class Mission(Base, BaseModel):
     
     # Relationships
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    user: Mapped["User"] = relationship("User", back_populates="missions")
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="missions")
     
     # Tags
     tags: Mapped[List[str]] = mapped_column(JSON, default=[], nullable=False)

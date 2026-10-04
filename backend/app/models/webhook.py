@@ -66,10 +66,8 @@ class Webhook(Base, BaseModel):
     
     # Relationships
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    user: Mapped["User"] = relationship("User", back_populates="webhooks")
     
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="webhooks")
     
     def __repr__(self) -> str:
         return f"<Webhook(id={self.id}, name={self.name}, url={self.url})>"

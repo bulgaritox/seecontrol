@@ -6,13 +6,14 @@ Handles CRUD operations for agents
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select, count
+from sqlalchemy import select, func
 from sqlalchemy import or_, and_
 from typing import List, Optional
 from datetime import datetime
 import logging
 
 from ..models.agent import Agent, AgentStatus
+from ..models.task import Task, TaskStatus, TaskPriority
 from ..models.user import User
 from ..models.workspace import Workspace
 from ..schemas.agent import AgentCreate, AgentUpdate, AgentResponse, AgentListResponse, AgentAssign
@@ -22,7 +23,7 @@ from ..config.database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agents", tags=["agents"])
+router = APIRouter(tags=["agents"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 
@@ -68,7 +69,7 @@ async def list_agents(
         result = await db.execute(
             select(Workspace.id).where(Workspace.user_id == user_id)
         )
-        workspace_ids = [row.id for row in result.scalars().all()]
+        workspace_ids = list(result.scalars().all())
         if workspace_ids:
             query = query.where(Agent.workspace_id.in_(workspace_ids))
     
@@ -77,7 +78,7 @@ async def list_agents(
         query = query.where(Agent.status == status)
     
     # Get total count
-    count_query = select(count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(query.subquery())
     result = await db.execute(count_query)
     total = result.scalar_one()
     
