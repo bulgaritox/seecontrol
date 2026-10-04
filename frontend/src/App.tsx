@@ -30,7 +30,7 @@ export default function App() {
   const {
     agents, tasks, activity, chat, stats, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
-    saveAgent, saveLook, providerMeeting,
+    saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
   } = useLiveOffice()
 
   const editing = agents.find((a) => a.id === editingId) ?? null
@@ -120,6 +120,8 @@ export default function App() {
             onEdit={setEditingId}
             onPause={pauseAgent}
             onResume={resumeAgent}
+            onTogglePower={togglePower}
+            onAddAgent={addAgent}
           />
 
           <main style={{ minWidth: 0 }}>
@@ -193,6 +195,9 @@ export default function App() {
           onLook={saveLook}
           onPause={pauseAgent}
           onResume={resumeAgent}
+          onTogglePower={togglePower}
+          onRemove={removeAgent}
+          onMood={setMood}
         />
       )}
 

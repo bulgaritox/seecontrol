@@ -71,6 +71,9 @@ class Agent(Base, BaseModel):
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
     
+    # Power switch (on/off desde la UI)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
     
     def __repr__(self) -> str:
         return f"<Agent(id={self.id}, name={self.name}, status={self.status.value})>"

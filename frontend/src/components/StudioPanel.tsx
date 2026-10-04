@@ -10,16 +10,22 @@ interface Props {
   onEdit: (id: string) => void
   onPause: (id: string) => void
   onResume: (id: string) => void
+  onTogglePower: (id: string) => void
+  onAddAgent: (input: { name: string; role: string; provider: string; model: string }) => void
 }
 
 const GB = "'Press Start 2P', monospace"
 const MONO = "ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace"
 
-export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume }: Props) {
+export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume, onTogglePower, onAddAgent }: Props) {
   const [tab, setTab] = useState<'studio' | 'chat'>('studio')
   const [input, setInput] = useState('')
   const [provider, setProvider] = useState('anthropic')
   const [model, setModel] = useState('claude-3-5-sonnet-latest')
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newRole, setNewRole] = useState('')
+  const [newProvider, setNewProvider] = useState('mistral')
 
   const allowed = configuredProviders()
   const providerOptions = PROVIDERS.filter((p) => allowed.length === 0 || allowed.includes(p.id))
@@ -53,24 +59,59 @@ export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume }:
 
       {tab === 'studio' ? (
         <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+          <button
+            onClick={() => setAdding((v) => !v)}
+            style={{ width: '100%', fontSize: 12, fontFamily: MONO, fontWeight: 'bold', background: adding ? '#1E1E1E' : '#052E16', color: adding ? '#A8A29E' : '#22C55E', border: '1px solid #14532D', borderRadius: 8, padding: '7px 0', cursor: 'pointer', marginBottom: 6 }}
+          >
+            {adding ? '✕ Cancelar' : '＋ Agregar agente'}
+          </button>
+          {adding && (
+            <div style={{ background: '#fff', border: '1px solid #D6D0BF', borderRadius: 8, padding: 8, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nombre (ej. Nova)" style={{ border: '1px solid #D6D0BF', borderRadius: 6, padding: '6px 8px', fontSize: 12, fontFamily: MONO }} />
+              <input value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder="Rol (ej. QA Tester)" style={{ border: '1px solid #D6D0BF', borderRadius: 6, padding: '6px 8px', fontSize: 12, fontFamily: MONO }} />
+              <select value={newProvider} onChange={(e) => setNewProvider(e.target.value)} style={{ border: '1px solid #D6D0BF', borderRadius: 6, padding: 6, fontSize: 11, fontFamily: MONO, background: '#fff' }}>
+                {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <button
+                onClick={() => {
+                  if (!newName.trim() || !newRole.trim()) return
+                  onAddAgent({ name: newName.trim(), role: newRole.trim(), provider: newProvider, model: (PROVIDER_MODELS[newProvider] ?? [''])[0] ?? '' })
+                  setNewName('')
+                  setNewRole('')
+                  setAdding(false)
+                }}
+                style={{ fontSize: 12, fontFamily: MONO, fontWeight: 'bold', background: '#111827', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 0', cursor: 'pointer' }}
+              >
+                Crear en backend ✓
+              </button>
+            </div>
+          )}
           {agents.map((a) => {
             const fat = fatigueOf(a.energy)
             const paused = a.status === 'paused'
             return (
-              <div key={a.id} style={{ display: 'flex', gap: 8, padding: '8px 6px', borderBottom: '1px dashed #E5E0D5', alignItems: 'center' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: a.shirt, border: '2px solid #111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 13, color: '#111', flexShrink: 0 }}>
-                  {a.name[0]}
+              <div key={a.id} style={{ display: 'flex', gap: 8, padding: '8px 6px', borderBottom: '1px dashed #E5E0D5', alignItems: 'center', opacity: a.is_active ? 1 : 0.55 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: a.shirt, border: '2px solid #111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 13, color: '#111', flexShrink: 0, filter: a.is_active ? 'none' : 'grayscale(1)' }}>
+                  {a.is_active ? a.name[0] : '💤'}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12 }}>
-                    <b style={{ color: FATIGUE_META[fat].color }}>{a.name}</b>{' '}
+                    <b style={{ color: a.is_active ? FATIGUE_META[fat].color : '#9CA3AF' }}>{a.name}</b>{' '}
                     <span style={{ color: '#78716C' }}>({a.role})</span>
+                    {!a.is_active && <span style={{ fontSize: 10, color: '#9CA3AF' }}> · OFF</span>}
                   </div>
                   <div style={{ fontSize: 11, color: '#57534E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {a.meeting ? '☕ en reunión' : a.resting ? '😴 en descanso' : paused ? '⏸ en pausa' : a.status === 'blocked' ? '🚩 bloqueado' : a.task || a.log} ·{' '}
+                    {!a.is_active ? 'apagado' : a.meeting ? '☕ en reunión' : a.resting ? '😴 en descanso' : paused ? '⏸ en pausa' : a.status === 'blocked' ? '🚩 bloqueado' : a.task || a.log} ·{' '}
                     <span style={{ color: FATIGUE_META[fat].color, fontWeight: 'bold' }}>{Math.round(a.energy)}%</span>
                   </div>
                 </div>
+                <button
+                  title={a.is_active ? 'Apagar agente' : 'Encender agente'}
+                  onClick={() => onTogglePower(a.id)}
+                  style={{ border: '1px solid #D6D0BF', background: a.is_active ? '#052E16' : '#F3F4F6', color: a.is_active ? '#22C55E' : '#9CA3AF', borderRadius: 6, cursor: 'pointer', fontSize: 12, padding: '2px 6px', flexShrink: 0 }}
+                >
+                  ⏻
+                </button>
                 <button
                   title={paused ? 'Reanudar' : 'Detener actividad'}
                   onClick={() => (paused ? onResume(a.id) : onPause(a.id))}

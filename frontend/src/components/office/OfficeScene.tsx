@@ -97,7 +97,7 @@ export function OfficeScene({
   onAgentClick,
 }: {
   agents: LiveAgent[]
-  stats: { total: number; working: number; blocked: number; done: number; global: number }
+  stats: { total: number; working: number; blocked: number; done: number; global: number; off?: number }
   onAgentClick?: (id: string) => void
 }) {
   const [themeId, setThemeId] = useState<OfficeThemeId>(() => (localStorage.getItem('sc_theme') as OfficeThemeId) || 'seria')
@@ -125,10 +125,20 @@ export function OfficeScene({
   const ink = dark ? '#E2E8F0' : '#57534E'
 
   const bubbleFor = (a: LiveAgent): string =>
-    a.meeting ? '☕ reunión BYOK' : a.resting ? 'Zzz…' : a.status === 'paused' ? '⏸ en pausa'
+    a.mood ? a.mood.headline
+    : a.meeting ? '☕ reunión BYOK' : a.resting ? 'Zzz…' : a.status === 'paused' ? '⏸ en pausa'
     : a.status === 'blocked' ? '🚩 ¡Necesito soporte!' : a.status === 'thinking' ? '💭…' : a.log
 
   const nameTag = (a: LiveAgent) => {
+    if (!a.is_active) {
+      return (
+        <div style={{ textAlign: 'center', marginTop: -4 }}>
+          <div style={{ fontSize: 10, fontWeight: 'bold', color: '#9CA3AF', background: 'rgba(20,20,20,.9)', borderRadius: 4, padding: '0 4px', display: 'inline-block', fontFamily: 'monospace' }}>
+            {a.name} · 💤 OFF
+          </div>
+        </div>
+      )
+    }
     const fat = fatigueOf(a.energy)
     return (
       <div style={{ textAlign: 'center', marginTop: -4 }}>
@@ -321,20 +331,27 @@ export function OfficeScene({
       {seated.map((a) => {
         const p = posOf(a)
         const fat = fatigueOf(a.energy)
-        const aura = a.resting ? FATIGUE_META.burnout.color : FATIGUE_META[fat].color
+        const aura = !a.is_active ? '#4B5563' : a.resting ? FATIGUE_META.burnout.color : FATIGUE_META[fat].color
+        const showBubble = a.mood || a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss'
         return (
           <div
             key={a.id}
             title={`${a.name} · ${a.role} (clic para editar)`}
             onClick={() => onAgentClick?.(a.id)}
-            style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%,-100%)', zIndex: 5, cursor: 'pointer' }}
+            style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%,-100%)', zIndex: 5, cursor: 'pointer', opacity: a.is_active ? 1 : 0.45, filter: a.is_active ? 'none' : 'grayscale(0.8)' }}
           >
-            {(a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss') && (
-              <div className="sc-bubble" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translate(-50%,0)', marginBottom: 46, background: '#fff', color: '#111', fontSize: 10, padding: '4px 8px', borderRadius: 8, border: '2px solid #111', whiteSpace: 'nowrap', fontFamily: 'monospace', zIndex: 6 }}>
-                {bubbleFor(a)}
+            {showBubble && (
+              <div className="sc-bubble" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translate(-50%,0)', marginBottom: 46, background: a.mood ? '#FEF3C7' : '#fff', color: '#111', fontSize: 10, padding: '4px 8px', borderRadius: 8, border: a.mood ? '2px solid #F59E0B' : '2px solid #111', whiteSpace: a.mood ? 'normal' : 'nowrap', width: a.mood ? 190 : undefined, fontFamily: 'monospace', zIndex: 6 }}>
+                {a.mood ? (
+                  <span>
+                    <b>{a.mood.headline}</b>
+                    <br />
+                    <span style={{ fontSize: 8, color: '#78716C' }}>{a.mood.detail}</span>
+                  </span>
+                ) : bubbleFor(a)}
               </div>
             )}
-            <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status={a.resting ? 'blocked' : a.status} aura={aura} />
+            <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status={!a.is_active ? 'paused' : a.resting ? 'blocked' : a.status} aura={aura} />
             {nameTag(a)}
           </div>
         )
@@ -389,6 +406,7 @@ export function OfficeScene({
         <span><b style={{ color: '#EF4444' }}>{stats.blocked}</b> Bloqueados</span>
         <span><b style={{ color: '#22C55E' }}>{stats.done}</b> Listos</span>
         <span><b style={{ color: '#22C55E' }}>{stats.global}%</b> Global</span>
+        {(stats.off ?? 0) > 0 && <span><b style={{ color: '#9CA3AF' }}>💤{stats.off}</b> Off</span>}
         <span style={{ display: 'flex', gap: 4 }}>
           {agents.slice(0, 8).map((a) => (
             <span key={a.id} title={a.name} style={{ width: 14, height: 14, borderRadius: '50%', background: a.shirt, border: '2px solid #111', display: 'inline-block' }} />

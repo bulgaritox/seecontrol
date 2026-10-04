@@ -49,6 +49,9 @@ class AgentCreate(AgentBase):
     # Limits
     max_turns: int = Field(default=50, ge=1, le=500)
     token_budget: int = Field(default=10000, ge=1)
+    
+    # Power switch
+    is_active: bool = Field(default=True)
 
 
 class AgentUpdate(BaseModel):
@@ -83,6 +86,9 @@ class AgentUpdate(BaseModel):
     # Limits
     max_turns: Optional[int] = Field(default=None, ge=1, le=500)
     token_budget: Optional[int] = Field(default=None, ge=1)
+    
+    # Power switch
+    is_active: Optional[bool] = None
 
 
 class AgentResponse(AgentBase):
@@ -115,6 +121,9 @@ class AgentResponse(AgentBase):
     # Limits
     max_turns: int
     token_budget: int
+    
+    # Power switch
+    is_active: bool
     
     # Metadata
     user_id: str

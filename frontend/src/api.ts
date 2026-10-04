@@ -17,6 +17,7 @@ export interface BackendAgent {
   provider?: string | null
   model?: string | null
   skills: string[]
+  is_active: boolean
 }
 
 export interface BackendTask {
@@ -153,10 +154,39 @@ export interface AgentPatch {
   model?: string
   temperature?: number
   current_task?: string | null
+  is_active?: boolean
 }
 
 export async function updateAgent(id: string, patch: AgentPatch): Promise<void> {
   await req('PUT', `/api/agents/${id}`, patch)
+}
+
+export interface AgentMood {
+  headline: string
+  detail: string
+  code: string
+}
+
+export interface PingResult {
+  ok: boolean
+  reply?: string
+  tokens?: number
+  provider?: string
+  model?: string
+  agent?: string
+  mood?: AgentMood
+}
+
+export async function pingAgent(id: string, message?: string): Promise<PingResult> {
+  return req<PingResult>('POST', `/api/agents/${id}/ping`, { message: message ?? 'Responde solo: OK' })
+}
+
+export async function createAgent(payload: Record<string, unknown>): Promise<void> {
+  await req('POST', '/api/agents/', payload)
+}
+
+export async function deleteAgent(id: string): Promise<void> {
+  await req('DELETE', `/api/agents/${id}`)
 }
 
 export async function postAgentStatus(agentId: string, status: string, progress?: number): Promise<void> {

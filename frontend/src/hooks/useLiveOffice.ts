@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROSTER, CHATTER, ACTIVITY_TPL, fatigueOf } from '../data/demo'
 import {
   ensureAuth, getAgents, getTasks, createTask, updateAgent, updateTask, postAgentStatus,
-  connectOfficeWS, getHealth, type AgentPatch,
+  createAgent, deleteAgent, connectOfficeWS, getHealth, type AgentPatch, type AgentMood,
 } from '../api'
 
 export interface LiveAgent {
@@ -25,6 +25,8 @@ export interface LiveAgent {
   log: string
   resting: boolean
   meeting: boolean
+  is_active: boolean
+  mood?: AgentMood
   backendId?: string
 }
 
@@ -113,6 +115,7 @@ export function useLiveOffice() {
       log: pick(CHATTER),
       resting: false,
       meeting: false,
+      is_active: true,
     })),
   )
   const [tasks, setTasks] = useState<LiveTask[]>([])
@@ -238,6 +241,7 @@ export function useLiveOffice() {
                 provider: match.provider ?? a.provider,
                 model: match.model ?? a.model,
                 skills: match.skills ?? a.skills,
+                is_active: match.is_active ?? true,
                 backendId: match.id,
                 resting: false,
                 log: match.current_task ?? a.log,
@@ -282,6 +286,7 @@ export function useLiveOffice() {
       const tick = tickRef.current
       setAgents((prev) =>
         prev.map((a) => {
+          if (!a.is_active) return a
           if (a.status === 'paused' || a.meeting) {
             if (a.meeting) return { ...a, log: 'en reunión ☕' }
             return a
@@ -483,7 +488,7 @@ export function useLiveOffice() {
 
   const providerMeeting = useCallback(
     (provider: string) => {
-      const affected = agents.filter((a) => a.provider === provider)
+      const affected = agents.filter((a) => a.provider === provider && a.is_active)
       if (affected.length === 0) return
       setAgents((prev) => prev.map((a) => (a.provider === provider ? { ...a, meeting: true } : a)))
       pushActivity('Boss', `☕ ${affected.map((a) => a.name).join(', ')} a sala de descanso: proveedor ${provider} actualizado`, 'warning')
@@ -495,16 +500,106 @@ export function useLiveOffice() {
   )
 
   const stats = useMemo(() => {
-    const working = agents.filter((a) => ['working', 'thinking', 'progress'].includes(a.status) && !a.resting && !a.meeting).length
-    const blocked = agents.filter((a) => a.status === 'blocked').length
-    const done = agents.filter((a) => a.status === 'completed').length
-    const global = agents.length ? Math.round(agents.reduce((s, a) => s + a.progress, 0) / agents.length) : 0
-    return { total: agents.length, working, blocked, done, global }
+    const active = agents.filter((a) => a.is_active)
+    const working = active.filter((a) => ['working', 'thinking', 'progress'].includes(a.status) && !a.resting && !a.meeting).length
+    const blocked = active.filter((a) => a.status === 'blocked').length
+    const done = active.filter((a) => a.status === 'completed').length
+    const global = active.length ? Math.round(active.reduce((s, a) => s + a.progress, 0) / active.length) : 0
+    return { total: active.length, working, blocked, done, global, off: agents.length - active.length }
   }, [agents])
+
+  const togglePower = useCallback(
+    async (id: string) => {
+      const a = agents.find((x) => x.id === id)
+      if (!a) return
+      const next = !a.is_active
+      setAgents((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: next } : x)))
+      pushActivity(a.name, next ? `${a.name} encendido ⚡` : `${a.name} apagado 💤`, next ? 'success' : 'warning')
+      if (a.backendId) {
+        try {
+          await updateAgent(a.backendId, { is_active: next })
+        } catch {
+          /* solo local */
+        }
+      }
+    },
+    [agents, pushActivity],
+  )
+
+  const addAgent = useCallback(
+    async (input: { name: string; role: string; provider: string; model: string }) => {
+      const freeDesk = [0, 1, 2, 3, 4, 5].find((d) => !agents.some((a) => a.desk === d && a.is_active)) ?? 8
+      try {
+        await createAgent({
+          name: input.name, role: input.role, character_type: 'custom',
+          provider: input.provider, model: input.model, status: 'idle',
+        })
+        pushActivity(input.name, `${input.name} agregado al equipo ✓ (${input.provider}/${input.model})`, 'success')
+        try {
+          const list = await getAgents()
+          const match = list.find((b) => b.name.toLowerCase() === input.name.toLowerCase())
+          if (match) {
+            setAgents((prev) => [
+              ...prev,
+              {
+                id: `demo-${match.id}`, name: match.name, role: match.role, description: '',
+                character: match.character_type, hair: '#9CA3AF', shirt: '#6B7280', cut: 'short',
+                provider: match.provider ?? input.provider, model: match.model ?? input.model,
+                skills: match.skills ?? [], desk: freeDesk, status: match.status,
+                progress: 0, energy: 25, task: '', log: pick(CHATTER),
+                resting: false, meeting: false, is_active: true, backendId: match.id,
+              },
+            ])
+            return
+          }
+        } catch {
+          /* cae al alta local */
+        }
+      } catch {
+        /* alta local si el backend no responde */
+      }
+      setAgents((prev) => [
+        ...prev,
+        {
+          id: `local-${seq++}`, name: input.name, role: input.role, description: '',
+          character: 'custom', hair: '#9CA3AF', shirt: '#6B7280', cut: 'short',
+          provider: input.provider, model: input.model, skills: [],
+          desk: freeDesk, status: 'idle', progress: 0, energy: 25, task: '',
+          log: pick(CHATTER), resting: false, meeting: false, is_active: true,
+        },
+      ])
+    },
+    [agents, pushActivity],
+  )
+
+  const removeAgent = useCallback(
+    async (id: string) => {
+      const a = agents.find((x) => x.id === id)
+      setAgents((prev) => prev.filter((x) => x.id !== id))
+      pushActivity(a?.name ?? '?', `${a?.name ?? '?'} eliminado del equipo 🗑`, 'warning')
+      if (a?.backendId) {
+        try {
+          await deleteAgent(a.backendId)
+        } catch {
+          /* solo local */
+        }
+      }
+    },
+    [agents, pushActivity],
+  )
+
+  const setMood = useCallback((id: string, mood: AgentMood | undefined) => {
+    setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, mood } : a)))
+    if (mood) {
+      window.setTimeout(() => {
+        setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, mood: undefined } : a)))
+      }, 45000)
+    }
+  }, [])
 
   return {
     agents, tasks, activity, chat, stats, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
-    saveAgent, saveLook, providerMeeting, fatigueOf,
+    saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood, fatigueOf,
   }
 }

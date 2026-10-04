@@ -5,6 +5,7 @@ Handles CRUD operations for agents
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy import or_, and_
@@ -19,6 +20,9 @@ from ..models.workspace import Workspace
 from ..schemas.agent import AgentCreate, AgentUpdate, AgentResponse, AgentListResponse, AgentAssign
 from ..services.auth import auth_service
 from ..services.orchestration import orchestration_service
+from ..services.llm import llm_service, LLMError
+from ..services.moods import mood_for
+from ..config.llm import ProviderType
 from ..config.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -110,6 +114,7 @@ async def list_agents(
                 handoff_to=a.handoff_to,
                 max_turns=a.max_turns,
                 token_budget=a.token_budget,
+                is_active=a.is_active,
                 user_id=str(a.user_id),
                 workspace_id=str(a.workspace_id),
                 created_at=a.created_at,
@@ -185,6 +190,7 @@ async def get_agent(
         handoff_to=agent.handoff_to,
         max_turns=agent.max_turns,
         token_budget=agent.token_budget,
+        is_active=agent.is_active,
         user_id=str(agent.user_id),
         workspace_id=str(agent.workspace_id),
         created_at=agent.created_at,
@@ -267,6 +273,7 @@ async def create_agent(
         handoff_to=agent_data.handoff_to or [],
         max_turns=agent_data.max_turns or 50,
         token_budget=agent_data.token_budget or 10000,
+        is_active=agent_data.is_active,
         user_id=user_id,
         workspace_id=str(workspace.id),
     )
@@ -298,6 +305,7 @@ async def create_agent(
         handoff_to=agent.handoff_to,
         max_turns=agent.max_turns,
         token_budget=agent.token_budget,
+        is_active=agent.is_active,
         user_id=str(agent.user_id),
         workspace_id=str(agent.workspace_id),
         created_at=agent.created_at,
@@ -387,6 +395,8 @@ async def update_agent(
         agent.max_turns = agent_data.max_turns
     if agent_data.token_budget is not None:
         agent.token_budget = agent_data.token_budget
+    if agent_data.is_active is not None:
+        agent.is_active = agent_data.is_active
     
     agent.updated_at = datetime.utcnow()
     
@@ -416,6 +426,7 @@ async def update_agent(
         handoff_to=agent.handoff_to,
         max_turns=agent.max_turns,
         token_budget=agent.token_budget,
+        is_active=agent.is_active,
         user_id=str(agent.user_id),
         workspace_id=str(agent.workspace_id),
         created_at=agent.created_at,
@@ -553,6 +564,7 @@ async def assign_task_to_agent(
         handoff_to=agent.handoff_to,
         max_turns=agent.max_turns,
         token_budget=agent.token_budget,
+        is_active=agent.is_active,
         user_id=str(agent.user_id),
         workspace_id=str(agent.workspace_id),
         created_at=agent.created_at,
@@ -601,3 +613,81 @@ async def get_agent_office_state(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     
     return agent.to_office_state()
+
+
+class AgentPing(BaseModel):
+    """Tiny test message for an agent (minimal tokens)"""
+    message: Optional[str] = "Responde solo: OK"
+
+
+# ============================================
+# PING AGENT (prueba viva con su proveedor)
+# ============================================
+
+@router.post("/{agent_id}/ping", response_model=dict)
+async def ping_agent(
+    agent_id: str,
+    payload: AgentPing,
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """Envía un mensaje mínimo al proveedor del agente.
+
+    Si el proveedor responde, devuelve su réplica. Si falla (rate limit,
+    sin cuota, key inválida...), devuelve un mensaje con personalidad
+    (headline divertido + error real en pequeño).
+    """
+    auth = auth_service.verify_token(token)
+    if not auth:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    
+    user_id = auth.get("sub")
+    
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if agent.user_id != user_id:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    provider_name = (agent.provider or "mistral").lower()
+    try:
+        provider = ProviderType(provider_name)
+    except ValueError:
+        provider = ProviderType.MISTRAL
+    
+    model = agent.model or "mistral-small-latest"
+    question = (payload.message or "Responde solo: OK").strip()[:200]
+    
+    try:
+        content, tokens, used = await llm_service.chat(
+            provider=provider,
+            model=model,
+            messages=[
+                {"role": "system", "content": f"Eres {agent.name}, {agent.role} del equipo SeeControl. Responde en una sola línea."},
+                {"role": "user", "content": question},
+            ],
+            max_tokens=15,
+            temperature=0,
+        )
+        return {
+            "ok": True,
+            "reply": content,
+            "tokens": tokens,
+            "provider": used,
+            "model": model,
+            "agent": agent.name,
+        }
+    except LLMError as e:
+        return {
+            "ok": False,
+            "agent": agent.name,
+            "provider": provider.value,
+            "model": model,
+            "mood": mood_for(e.message, provider.value, agent.name),
+        }
