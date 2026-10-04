@@ -33,20 +33,17 @@ class TokenUsage(Base, BaseModel):
     prompt: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     completion: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Metadata (attr renombrado: 'metadata' está reservado por Declarative)
+    usage_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
     
     # Relationships
     user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    user: Mapped[Optional["User"]] = relationship("User", back_populates="token_usages")
     
     agent_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    agent: Mapped[Optional["Agent"]] = relationship("Agent", back_populates="token_usages")
     
     task_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="token_usages")
     
     def __repr__(self) -> str:
         return f"<TokenUsage(id={self.id}, tokens={self.tokens_used}, model={self.model}, provider={self.provider})>"

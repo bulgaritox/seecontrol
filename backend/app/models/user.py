@@ -38,13 +38,6 @@ class User(Base, BaseModel):
     theme: Mapped[Optional[str]] = mapped_column(String(50), default="pixel", nullable=True)
     
     # Relationships
-    agents: Mapped[List["Agent"]] = relationship("Agent", back_populates="user", cascade="all, delete-orphan")
-    skills: Mapped[List["Skill"]] = relationship("Skill", back_populates="user")
-    tasks: Mapped[List["Task"]] = relationship("Task", back_populates="user")
-    missions: Mapped[List["Mission"]] = relationship("Mission", back_populates="user")
-    workspaces: Mapped[List["Workspace"]] = relationship("Workspace", back_populates="user")
-    token_usages: Mapped[List["TokenUsage"]] = relationship("TokenUsage", back_populates="user")
-    webhooks: Mapped[List["Webhook"]] = relationship("Webhook", back_populates="user")
     
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, role={self.role.value})>"

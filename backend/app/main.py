@@ -6,8 +6,8 @@ Multi-Agent Orchestration Platform with Real-Time Office Visualization
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.lifespan import lifespan
 from contextlib import asynccontextmanager
+import os
 from typing import AsyncGenerator, Dict, List
 import asyncio
 import json
@@ -102,8 +102,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files (only if dir exists)
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ============================================

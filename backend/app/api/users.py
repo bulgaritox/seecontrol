@@ -6,7 +6,7 @@ Handles user authentication, registration, and management
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime, timedelta
 import logging
@@ -19,7 +19,7 @@ from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/users", tags=["users", "authentication"])
+router = APIRouter(tags=["users", "authentication"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 

@@ -9,6 +9,7 @@ import json
 import logging
 from datetime import datetime
 import asyncio
+from sqlalchemy import select
 
 from ..models.agent import Agent, AgentStatus
 from ..models.task import Task, TaskStatus, TaskPriority
@@ -237,7 +238,7 @@ Return your response in JSON format with the following structure:
         db: AsyncSessionLocal,
     ):
         """Assign an appropriate agent to a task"""
-        metadata = task.metadata or {}
+        metadata = task.task_metadata or {}
         required_skills = metadata.get("required_skills", [])
         suggested_agent_type = metadata.get("suggested_agent_type", "generalist")
         

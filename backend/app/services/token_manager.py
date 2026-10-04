@@ -6,6 +6,7 @@ Tracks token usage and manages budgets
 from typing import Optional, Dict, Any, List
 import logging
 from datetime import datetime, timedelta
+from sqlalchemy import select, func
 
 from ..models.token_usage import TokenUsage
 from ..models.workspace import Workspace

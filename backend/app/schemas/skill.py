@@ -5,6 +5,7 @@ Pydantic schemas for skill validation
 
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
+from datetime import datetime
 from enum import Enum
 
 from ..models.skill import SkillCategory

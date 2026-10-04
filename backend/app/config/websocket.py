@@ -157,6 +157,70 @@ class WebSocketManager:
         """Send message to all connections in an endpoint"""
         await self.broadcast(message, endpoint=endpoint)
 
+    # ============================================
+    # DOMAIN HELPERS (usados por los routers)
+    # ============================================
+
+    @staticmethod
+    def _status_value(status) -> str:
+        return status.value if hasattr(status, "value") else str(status)
+
+    async def broadcast_mission_update(self, mission) -> None:
+        """Notify mission changes to its workspace"""
+        try:
+            await self.send_to_workspace(str(mission.workspace_id), {
+                "type": "mission.updated",
+                "mission_id": str(mission.id),
+                "title": mission.title,
+                "status": self._status_value(mission.status),
+                "progress": float(mission.progress or 0),
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"broadcast_mission_update error: {e}")
+
+    async def broadcast_office_state(self, workspace_id: str) -> None:
+        """Notify that the office state changed (clients refetch)"""
+        try:
+            await self.send_to_workspace(str(workspace_id), {
+                "type": "office.refresh",
+                "workspace_id": str(workspace_id),
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"broadcast_office_state error: {e}")
+
+    async def broadcast_skill_update(self, skill) -> None:
+        """Notify skill changes to its workspace"""
+        try:
+            await self.send_to_workspace(str(skill.workspace_id), {
+                "type": "skill.updated",
+                "skill_id": str(skill.id),
+                "name": skill.name,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"broadcast_skill_update error: {e}")
+
+    async def broadcast_webhook_event(
+        self,
+        webhook_id: str,
+        event_type: str,
+        data: dict,
+        workspace_id: str,
+    ) -> None:
+        """Notify webhook event to its workspace"""
+        try:
+            await self.send_to_workspace(str(workspace_id), {
+                "type": "webhook.event",
+                "webhook_id": str(webhook_id),
+                "event": event_type,
+                "data": data or {},
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"broadcast_webhook_event error: {e}")
+
 
 # Create global WebSocket manager instance
 websocket_manager = WebSocketManager()

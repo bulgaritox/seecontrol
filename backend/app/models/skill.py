@@ -57,9 +57,7 @@ class Skill(Base, BaseModel):
     
     # Relationships
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    user: Mapped["User"] = relationship("User", back_populates="skills")
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="skills")
     
     # Tags for organization
     tags: Mapped[List[str]] = mapped_column(JSON, default=[], nullable=False)

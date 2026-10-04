@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CharacterType, 
-  AnimationStatus, 
   CHARACTERS, 
   ANIMATIONS, 
   STATUS_ICONS,
@@ -10,7 +9,6 @@ import {
   STATUS_COLORS,
   agentStatusToAnimationStatus
 } from '../../types/pixel-art'
-import { Agent } from '../../types'
 
 // ============================================
 // INTERFACES
@@ -80,8 +78,6 @@ const styles = {
     backgroundSize: `${frameWidth * size}px ${frameHeight * size * 2}px`,
     backgroundPosition: `-${frameIndex * size}px 0`,
     imageRendering: 'pixelated' as const,
-    imageRendering: '-moz-crisp-edges' as const,
-    imageRendering: 'crisp-edges' as const,
   }),
   
   statusIcon: {
@@ -416,11 +412,11 @@ export const PixelAgentOptimized: React.FC<PixelAgentOptimizedProps> = ({
   status = 'idle',
   progress = 0,
   name,
-  currentTask,
-  role,
+  currentTask: _currentTask,
+  role: _role,
   size = 32,
   showProgress = true,
-  showTooltip = false,
+  showTooltip: _showTooltip = false,
   onClick,
   onHover,
   className = '',
@@ -477,6 +473,7 @@ export const PixelAgentOptimized: React.FC<PixelAgentOptimizedProps> = ({
     ...styles.container(size, false),
     width: compact ? `${size}px` : `${size}px`,
     height: compact ? `${size}px` : `${size * 2}px`,
+    filter: isHovering ? 'brightness(1.25)' : 'none',
   }
   
   const spriteStyle = {

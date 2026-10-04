@@ -6,7 +6,7 @@ Handles CRUD operations for skills
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select, count
+from sqlalchemy import select, func
 from sqlalchemy import or_, and_, desc
 from typing import List, Optional
 from datetime import datetime
@@ -29,7 +29,7 @@ from ..config.websocket import websocket_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/skills", tags=["skills"])
+router = APIRouter(tags=["skills"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 
@@ -77,7 +77,7 @@ async def list_skills(
         result = await db.execute(
             select(Workspace.id).where(Workspace.user_id == user_id)
         )
-        workspace_ids = [row.id for row in result.scalars().all()]
+        workspace_ids = list(result.scalars().all())
         if workspace_ids:
             query = query.where(Skill.workspace_id.in_(workspace_ids))
     
@@ -97,7 +97,7 @@ async def list_skills(
     query = query.order_by(desc(Skill.created_at))
     
     # Get total count
-    count_query = select(count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(query.subquery())
     result = await db.execute(count_query)
     total = result.scalar_one()
     

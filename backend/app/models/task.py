@@ -46,7 +46,6 @@ class Task(Base, BaseModel):
     
     # Agent assignment
     agent_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    agent: Mapped[Optional["Agent"]] = relationship("Agent", back_populates="tasks")
     
     # Dependencies
     dependencies: Mapped[List[str]] = mapped_column(JSON, default=[], nullable=False)
@@ -70,16 +69,14 @@ class Task(Base, BaseModel):
     
     # Relationships
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    user: Mapped["User"] = relationship("User", back_populates="tasks")
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="tasks")
     
     # Subtasks
     subtasks: Mapped[List[dict]] = mapped_column(JSON, default=[], nullable=False)
     completed_subtasks: Mapped[List[str]] = mapped_column(JSON, default=[], nullable=False)
     
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Metadata (attr renombrado: 'metadata' está reservado por Declarative)
+    task_metadata: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
     
     def __repr__(self) -> str:
         return f"<Task(id={self.id}, title={self.title}, status={self.status.value})>"

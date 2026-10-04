@@ -69,12 +69,8 @@ class Agent(Base, BaseModel):
     
     # Relationships
     user_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    user: Mapped["User"] = relationship("User", back_populates="agents")
     workspace_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="agents")
     
-    tasks: Mapped[List["Task"]] = relationship("Task", back_populates="agent")
-    token_usages: Mapped[List["TokenUsage"]] = relationship("TokenUsage", back_populates="agent")
     
     def __repr__(self) -> str:
         return f"<Agent(id={self.id}, name={self.name}, status={self.status.value})>"
