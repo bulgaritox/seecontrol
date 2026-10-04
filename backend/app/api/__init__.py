@@ -18,3 +18,18 @@ __all__ = [
     "webhooks_router",
     "office_router",
 ]
+
+# Import all routers to ensure they are registered
+def register_all_routers(app):
+    """Helper function to register all API routers"""
+    from . import users, agents, skills, tasks, missions, workspace, webhooks, office
+    return [
+        users.router,
+        agents.router,
+        skills.router,
+        tasks.router,
+        missions.router,
+        workspace.router,
+        webhooks.router,
+        office.router,
+    ]
