@@ -1,0 +1,1580 @@
+/* ============================================
+   SeeControl - Estilos Globales
+   Estilo GameBoy Pokémon para la oficina virtual
+   ============================================ */
+
+/* ============================================
+   RESET Y ESTILOS BASE
+   ============================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset básico */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Estilo pixelado global para la aplicación */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Para elementos pixel art */
+.pixelated,
+.pixel-sprite,
+.pixel-agent,
+.pixel-office {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* ============================================
+   VARIABLES CSS - TEMA GAMEBOY
+   ============================================ */
+
+:root {
+  /* Colores principales (GameBoy) */
+  --color-primary: #00BFFF;
+  --color-secondary: #FF69B4;
+  --color-accent: #00FF7F;
+  --color-background: #0A0A0A;
+  --color-surface: #1A1A1A;
+  --color-border: #2A2A2A;
+  --color-text: #FFFFFF;
+  --color-text-secondary: #888888;
+  
+  /* Colores de estado */
+  --color-idle: #666666;
+  --color-working: #4CAF50;
+  --color-thinking: #2196F3;
+  --color-progress: #FFC107;
+  --color-blocked: #F44336;
+  --color-completed: #4CAF50;
+  --color-failed: #9C27B0;
+  --color-paused: #FF9800;
+  
+  /* Tamaños */
+  --cell-size: 40px;
+  --cell-spacing: 4px;
+  
+  /* Tipografía */
+  --font-family: 'Press Start 2P', 'Courier New', monospace;
+  --font-size-sm: 10px;
+  --font-size-md: 12px;
+  --font-size-lg: 14px;
+  
+  /* Sombras */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 12px rgba(0, 255, 255, 0.5);
+  
+  /* Transiciones */
+  --transition-fast: 0.1s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* Border radius */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+}
+
+/* ============================================
+   FUENTE GAMEBOY (IMPORTADA)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* Fuente alternativa si Press Start 2P no carga */
+@font-face {
+  font-family: 'PixelFont';
+  src: local('Courier New'), local('Monaco'), monospace;
+  font-weight: bold;
+}
+
+/* ============================================
+   ESTILOS GLOBALES DE LA APLICACIÓN
+   ============================================ */
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+  
+  /* Fondo con efecto GameBoy */
+  background-image: 
+    /* Cuadrícula sutil */
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Scrollbar personalizado estilo GameBoy */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Selección de texto */
+::selection {
+  background: var(--color-primary);
+  color: var(--color-background);
+}
+
+/* ============================================
+   ESTILOS DE LA OFICINA VIRTUAL
+   ============================================ */
+
+/* Contenedor principal de la oficina */
+.office-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Fondo estilo CRT (tubos de rayos catódicos) */
+.crt-effect {
+  position: relative;
+}
+
+.crt-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 100;
+  
+  /* Scanlines */
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    rgba(0, 0, 0, 0.1) 1px,
+    transparent 2px
+  );
+  
+  /* Curvatura CRT */
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.crt-effect::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 101;
+  
+  /* Brillo CRT */
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 70%
+  );
+}
+
+/* Efecto de parpadeo estilo GameBoy */
+.gameboy-flicker {
+  animation: gameboy-flicker 2s ease-in-out infinite;
+}
+
+@keyframes gameboy-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.95; }
+  94% { opacity: 1; }
+  95% { opacity: 0.98; }
+  96% { opacity: 1; }
+}
+
+/* ============================================
+   ESTILOS DE LOS AGENTES
+   ============================================ */
+
+/* Contenedor del agente */
+.agent-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+  transform-origin: center;
+}
+
+.agent-container:hover {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+.agent-container.selected {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-glow);
+  z-index: 10;
+}
+
+/* Sprite del agente */
+.agent-sprite {
+  width: 100%;
+  height: 100%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  transition: all var(--transition-normal);
+}
+
+/* Icono de estado */
+.status-icon {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+/* Barra de progreso */
+.progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--color-working);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  transition: width var(--transition-slow) ease;
+}
+
+/* Etiqueta de nombre */
+.name-tag {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--color-text);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Etiqueta de tarea */
+.task-tag {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--color-text);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 5;
+}
+
+/* Tooltip */
+.agent-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  background: #1A1A1A;
+  border: 1px solid #3A3A3A;
+  border-radius: var(--radius-md);
+  padding: 8px;
+  min-width: 160px;
+  z-index: 20;
+  box-shadow: var(--shadow-md);
+}
+
+.agent-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #3A3A3A;
+}
+
+/* ============================================
+   ESTILOS DE LA OFICINA (GRID)
+   ============================================ */
+
+.office-grid {
+  display: grid;
+  gap: var(--cell-spacing);
+  padding: calc(var(--cell-spacing) * 2);
+  width: 100%;
+  height: 100%;
+}
+
+.office-cell {
+  position: relative;
+  width: var(--cell-size);
+  height: calc(var(--cell-size) * 2);
+  
+  /* Fondo de celda estilo GameBoy */
+  background: 
+    repeating-linear-gradient(
+      0px, 
+      var(--color-surface) 0px, 
+      var(--color-surface) 2px, 
+      transparent 2px, 
+      transparent 4px
+    ), 
+    repeating-linear-gradient(
+      0px 90deg, 
+      var(--color-surface) 0px, 
+      var(--color-surface) 2px, 
+      transparent 2px, 
+      transparent 4px
+    );
+  background-size: var(--cell-size) calc(var(--cell-size) * 2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+}
+
+.office-cell:hover {
+  background: var(--color-border);
+  border-color: var(--color-primary);
+}
+
+.office-cell.empty {
+  opacity: 0.5;
+}
+
+/* ============================================
+   ESTILOS DE LAS DECORACIONES
+   ============================================ */
+
+.decoration {
+  position: absolute;
+  image-rendering: pixelated;
+  z-index: 0;
+}
+
+.decoration-desk {
+  width: 40px;
+  height: 20px;
+  background: var(--color-border);
+  border: 2px solid var(--color-background);
+  border-radius: var(--radius-sm);
+}
+
+.decoration-desk::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 2px;
+  right: 2px;
+  height: 4px;
+  background: var(--color-background);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.decoration-chair {
+  width: 16px;
+  height: 16px;
+  background: var(--color-border);
+  border: 1px solid var(--color-background);
+  border-radius: 4px;
+}
+
+.decoration-screen {
+  width: 24px;
+  height: 16px;
+  background: var(--color-background);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  position: relative;
+  animation: screen-flicker 4s ease-in-out infinite;
+}
+
+.decoration-screen::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+}
+
+.decoration-whiteboard {
+  width: 64px;
+  height: 32px;
+  background: var(--color-text);
+  border: 3px solid var(--color-background);
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.decoration-whiteboard::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      var(--color-background) 0px,
+      var(--color-background) 1px,
+      transparent 1px,
+      transparent 2px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--color-background) 0px,
+      var(--color-background) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  background-size: 8px 8px;
+}
+
+.decoration-plant {
+  width: 16px;
+  height: 32px;
+  position: relative;
+}
+
+.decoration-plant::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 8px;
+  height: 16px;
+  background: var(--color-accent);
+  border-radius: 4px;
+}
+
+.decoration-plant::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 6px;
+  width: 4px;
+  height: 8px;
+  background: #8B4513;
+  border-radius: 2px;
+}
+
+.decoration-clock {
+  width: 16px;
+  height: 16px;
+  background: var(--color-border);
+  border: 2px solid var(--color-background);
+  border-radius: 50%;
+  position: relative;
+  animation: clock-tick 2s ease-in-out infinite;
+}
+
+.decoration-clock::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  background: var(--color-primary);
+  border-radius: 50%;
+}
+
+.decoration-clock::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  width: 2px;
+  height: 4px;
+  background: var(--color-background);
+  transform-origin: bottom center;
+}
+
+.decoration-window {
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary);
+  border: 2px solid var(--color-background);
+  border-radius: var(--radius-sm);
+  position: relative;
+  animation: window-flicker 6s ease-in-out infinite;
+}
+
+.decoration-window::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 16px;
+  height: 16px;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      var(--color-background) 0px,
+      var(--color-background) 1px,
+      transparent 1px,
+      transparent 2px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--color-background) 0px,
+      var(--color-background) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  background-size: 4px 4px;
+}
+
+.decoration-fan {
+  width: 16px;
+  height: 16px;
+  position: relative;
+  animation: fan-spin 0.5s linear infinite;
+}
+
+.decoration-fan::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  background: var(--color-border);
+  border-radius: 50%;
+}
+
+.decoration-fan::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 8px;
+  height: 2px;
+  background: var(--color-background);
+}
+
+.decoration-server {
+  width: 24px;
+  height: 32px;
+  background: var(--color-background);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  position: relative;
+  animation: server-blink 3s ease-in-out infinite;
+}
+
+.decoration-server::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-primary) 0px,
+    var(--color-primary) 2px,
+    var(--color-accent) 2px,
+    var(--color-accent) 4px
+  );
+  border-radius: 1px;
+}
+
+.decoration-light {
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  border-radius: 50%;
+  position: relative;
+  animation: light-flicker 1s ease-in-out infinite;
+}
+
+/* ============================================
+   ANIMACIONES DE DECORACIONES
+   ============================================ */
+
+@keyframes screen-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  95% { opacity: 0.9; }
+  96% { opacity: 1; }
+}
+
+@keyframes clock-tick {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@keyframes window-flicker {
+  0%, 100% { opacity: 1; }
+  95% { opacity: 1; }
+  96% { opacity: 0.9; }
+  97% { opacity: 1; }
+}
+
+@keyframes fan-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes server-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes light-flicker {
+  0%, 100% { 
+    opacity: 1; 
+    box-shadow: 0 0 4px 2px var(--color-accent); 
+  }
+  50% { 
+    opacity: 0.8; 
+    box-shadow: 0 0 2px 1px var(--color-accent); 
+  }
+}
+
+/* ============================================
+   ESTILOS DE LOS BOTONES
+   ============================================ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: var(--font-size-md);
+  font-weight: bold;
+  color: var(--color-background);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  text-decoration: none;
+}
+
+.button:hover {
+  background: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.button:active {
+  transform: translateY(0);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button-secondary {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.button-secondary:hover {
+  background: var(--color-surface);
+}
+
+.button-danger {
+  background: var(--color-blocked);
+}
+
+.button-danger:hover {
+  background: #ff4444;
+}
+
+.button-success {
+  background: var(--color-completed);
+}
+
+/* ============================================
+   ESTILOS DE LOS CARDS
+   ============================================ */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: all var(--transition-normal);
+}
+
+.card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.card-title {
+  font-size: var(--font-size-lg);
+  font-weight: bold;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.card-content {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+/* ============================================
+   ESTILOS DE LOS BADGES (ETIQUETAS)
+   ============================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+  border-radius: var(--radius-sm);
+}
+
+.badge-working {
+  background: rgba(76, 175, 80, 0.2);
+  color: var(--color-working);
+  border: 1px solid var(--color-working);
+}
+
+.badge-thinking {
+  background: rgba(33, 150, 243, 0.2);
+  color: var(--color-thinking);
+  border: 1px solid var(--color-thinking);
+}
+
+.badge-blocked {
+  background: rgba(244, 67, 54, 0.2);
+  color: var(--color-blocked);
+  border: 1px solid var(--color-blocked);
+}
+
+.badge-completed {
+  background: rgba(76, 175, 80, 0.2);
+  color: var(--color-completed);
+  border: 1px solid var(--color-completed);
+}
+
+.badge-idle {
+  background: rgba(102, 102, 102, 0.2);
+  color: var(--color-idle);
+  border: 1px solid var(--color-idle);
+}
+
+.badge-failed {
+  background: rgba(156, 39, 176, 0.2);
+  color: var(--color-failed);
+  border: 1px solid var(--color-failed);
+}
+
+/* ============================================
+   ESTILOS DE LA BARRA DE NAVEGACIÓN
+   ============================================ */
+
+.navbar {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.navbar-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--color-primary);
+}
+
+.navbar-links {
+  display: flex;
+  gap: 16px;
+}
+
+.navbar-link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--font-size-md);
+  transition: all var(--transition-normal);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.navbar-link:hover {
+  color: var(--color-text);
+  background: var(--color-border);
+}
+
+.navbar-link.active {
+  color: var(--color-primary);
+  background: rgba(0, 191, 255, 0.1);
+}
+
+/* ============================================
+   ESTILOS DEL SIDEBAR
+   ============================================ */
+
+.sidebar {
+  width: 240px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-section-title {
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+}
+
+.sidebar-item:hover {
+  color: var(--color-text);
+  background: var(--color-border);
+}
+
+.sidebar-item.active {
+  color: var(--color-primary);
+  background: rgba(0, 191, 255, 0.1);
+}
+
+.sidebar-item-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* ============================================
+   ESTILOS DEL CONTENIDO PRINCIPAL
+   ============================================ */
+
+.main-content {
+  margin-left: 240px;
+  padding: 16px;
+  flex: 1;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--color-text);
+}
+
+.page-subtitle {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+/* ============================================
+   ESTILOS DE LAS PÁGINAS
+   ============================================ */
+
+.page {
+  animation: page-fade-in 0.3s ease;
+}
+
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dashboard */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.dashboard-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: all var(--transition-normal);
+}
+
+.dashboard-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.dashboard-card-title {
+  font-size: var(--font-size-md);
+  font-weight: bold;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.dashboard-card-value {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--color-primary);
+  margin-bottom: 4px;
+}
+
+.dashboard-card-change {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+}
+
+.dashboard-card-change.positive {
+  color: var(--color-completed);
+}
+
+.dashboard-card-change.negative {
+  color: var(--color-blocked);
+}
+
+/* ============================================
+   ESTILOS DE LOS FORMULARIOS
+   ============================================ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 400px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: var(--font-size-md);
+  font-weight: bold;
+  color: var(--color-text);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 191, 255, 0.2);
+}
+
+.form-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.form-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23FFFFFF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: all var(--transition-normal);
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 191, 255, 0.2);
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  transition: all var(--transition-normal);
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 191, 255, 0.2);
+}
+
+.form-submit {
+  align-self: flex-start;
+}
+
+/* ============================================
+   ESTILOS DE LAS TABLAS
+   ============================================ */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.table-header {
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table-header-cell {
+  padding: 8px 12px;
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+  color: var(--color-text-secondary);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.table-body-row {
+  border-bottom: 1px solid var(--color-border);
+  transition: all var(--transition-normal);
+}
+
+.table-body-row:hover {
+  background: var(--color-background);
+}
+
+.table-body-cell {
+  padding: 8px 12px;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.table-action-button {
+  padding: 4px 8px;
+  font-size: var(--font-size-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.table-action-button:hover {
+  transform: scale(1.05);
+}
+
+.table-action-button-edit {
+  background: var(--color-primary);
+  color: var(--color-background);
+}
+
+.table-action-button-delete {
+  background: var(--color-blocked);
+  color: var(--color-text);
+}
+
+/* ============================================
+   ESTILOS DE LAS NOTIFICACIONES (TOAST)
+   ============================================ */
+
+.toast-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10000;
+}
+
+.toast {
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: toast-slide-in 0.3s ease;
+}
+
+.toast.success {
+  border-color: var(--color-completed);
+}
+
+.toast.error {
+  border-color: var(--color-blocked);
+}
+
+.toast.warning {
+  border-color: var(--color-progress);
+}
+
+.toast.info {
+  border-color: var(--color-primary);
+}
+
+.toast-icon {
+  font-size: 20px;
+}
+
+.toast-message {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  line-height: 1;
+}
+
+.toast-close:hover {
+  color: var(--color-text);
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================
+   ESTILOS DE LOS MODALES
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: modal-fade-in 0.2s ease;
+}
+
+.modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modal-slide-in 0.2s ease;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--color-text);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 24px;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--color-text);
+}
+
+.modal-body {
+  margin-bottom: 16px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   ESTILOS DE LOS ESTADOS DE LOS AGENTES
+   ============================================ */
+
+.agent-status-idle {
+  animation: agent-idle 2s ease-in-out infinite;
+}
+
+.agent-status-working {
+  animation: agent-working 0.5s ease-in-out infinite;
+}
+
+.agent-status-thinking {
+  animation: agent-thinking 3s ease-in-out infinite;
+}
+
+.agent-status-blocked {
+  animation: agent-blocked 0.5s ease-in-out infinite;
+}
+
+.agent-status-completed {
+  animation: agent-completed 1s ease-in-out infinite;
+}
+
+.agent-status-failed {
+  animation: agent-failed 0.3s ease-in-out infinite;
+}
+
+@keyframes agent-idle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes agent-working {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes agent-thinking {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
+@keyframes agent-blocked {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes agent-completed {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-completed); }
+  50% { box-shadow: 0 0 8px 4px var(--color-completed); }
+}
+
+@keyframes agent-failed {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* ============================================
+   ESTILOS RESPONSIVE
+   ============================================ */
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+  
+  .main-content {
+    margin-left: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+  
+  .sidebar-section {
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 8px;
+  }
+  
+  .navbar {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+  }
+  
+  .navbar-links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .office-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .office-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  
+  .sidebar {
+    display: none;
+  }
+  
+  .form {
+    max-width: 100%;
+  }
+}
+
+/* ============================================
+   ESTILOS DE LOS TEMAS
+   ============================================ */
+
+/* Tema Pixel (GameBoy) - Por defecto */
+:root {
+  --color-primary: #00BFFF;
+  --color-secondary: #FF69B4;
+  --color-accent: #00FF7F;
+  --color-background: #0A0A0A;
+  --color-surface: #1A1A1A;
+  --color-border: #2A2A2A;
+  --color-text: #FFFFFF;
+  --color-text-secondary: #888888;
+}
+
+/* Tema Cyberpunk */
+[data-theme="cyberpunk"] {
+  --color-primary: #00FFFF;
+  --color-secondary: #FF00FF;
+  --color-accent: #FFFF00;
+  --color-background: #000000;
+  --color-surface: #111111;
+  --color-border: #000022;
+  --color-text: #00FFFF;
+  --color-text-secondary: #8888FF;
+}
+
+/* Tema Minimal */
+[data-theme="minimal"] {
+  --color-primary: #000000;
+  --color-secondary: #666666;
+  --color-accent: #4CAF50;
+  --color-background: #FFFFFF;
+  --color-surface: #F5F5F5;
+  --color-border: #E0E0E0;
+  --color-text: #000000;
+  --color-text-secondary: #666666;
+}
+
+/* Tema Dark */
+[data-theme="dark"] {
+  --color-primary: #BB86FC;
+  --color-secondary: #03DAC6;
+  --color-accent: #FF9800;
+  --color-background: #121212;
+  --color-surface: #1E1E1E;
+  --color-border: #2A2A2A;
+  --color-text: #E0E0E0;
+  --color-text-secondary: #888888;
+}
+
+/* Tema Light */
+[data-theme="light"] {
+  --color-primary: #2196F3;
+  --color-secondary: #4CAF50;
+  --color-accent: #FFC107;
+  --color-background: #F5F5F5;
+  --color-surface: #E0E0E0;
+  --color-border: #D0D0D0;
+  --color-text: #212121;
+  --color-text-secondary: #666666;
+}
+
+/* ============================================
+   ESTILOS DE IMPRESIÓN
+   ============================================ */
+
+@media print {
+  .sidebar,
+  .navbar,
+  .toast-container,
+  .modal-overlay {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+  }
+  
+  .office-container {
+    max-height: none !important;
+  }
+}
