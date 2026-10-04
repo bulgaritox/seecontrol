@@ -60,6 +60,19 @@ export const PROVIDERS: ProviderInfo[] = [
 
 export const FAILOVER_ORDER = ['anthropic', 'openai', 'deepseek', 'mistral', 'groq']
 
+// Catálogo de modelos por proveedor (IDs reales): primero se elige
+// proveedor y de ahí se listan sus modelos. Sin hardcodear en la UI.
+export const PROVIDER_MODELS: Record<string, string[]> = {
+  openai: ['gpt-4o-mini', 'gpt-4o'],
+  anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
+  gemini: ['gemini-1.5-flash', 'gemini-1.5-pro'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  qwen: ['qwen-2.5-7b-instruct', 'qwen-2.5-72b-instruct'],
+  yi: ['yi-large'],
+  mistral: ['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest'],
+  groq: ['llama-3.1-8b-instant', 'llama-3.1-70b-versatile'],
+}
+
 export const CHATTER: string[] = [
   'compilando módulo…',
   'revisando diff del PR…',

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { LiveAgent } from '../hooks/useLiveOffice'
 import { AgentSprite } from './office/AgentSprite'
-import { ROSTER, PROVIDERS, FATIGUE_META, fatigueOf } from '../data/demo'
+import { ROSTER, PROVIDERS, PROVIDER_MODELS, FATIGUE_META, fatigueOf } from '../data/demo'
 import { ensureAuth, getSkills, type AgentPatch } from '../api'
 
 interface Props {
@@ -35,6 +35,7 @@ export function AgentEditor({ agent, onClose, onSave, onLook, onPause, onResume 
   const [desc, setDesc] = useState(agent.description)
   const [provider, setProvider] = useState(agent.provider)
   const [model, setModel] = useState(agent.model)
+  const [customModel, setCustomModel] = useState(false)
   const [temperature, setTemperature] = useState(0.7)
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [character, setCharacter] = useState(agent.character)
@@ -90,7 +91,13 @@ export function AgentEditor({ agent, onClose, onSave, onLook, onPause, onResume 
     window.setTimeout(() => setSaved(false), 2000)
   }
 
-  const provModels = (PROVIDERS.find((p) => p.id === provider)?.models ?? '').split('/').map((m) => m.trim())
+  const provModels = PROVIDER_MODELS[provider] ?? []
+  const pickProvider = (p: string) => {
+    setProvider(p)
+    const models = PROVIDER_MODELS[p] ?? []
+    setModel(models[0] ?? '')
+    setCustomModel(false)
+  }
 
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 340, maxWidth: '92vw', background: '#141414', borderLeft: '2px solid #333', zIndex: 50, display: 'flex', flexDirection: 'column', fontFamily: MONO }}>
@@ -116,19 +123,32 @@ export function AgentEditor({ agent, onClose, onSave, onLook, onPause, onResume 
 
         <section>
           <div style={{ fontFamily: GB, fontSize: 9, color: '#78716C', marginBottom: 6 }}>MOTOR LINGÜÍSTICO</div>
-          <label style={{ fontSize: 11, color: '#A8A29E' }}>Proveedor</label>
-          <select value={provider} onChange={(e) => setProvider(e.target.value)} style={inputStyle}>
+          <label style={{ fontSize: 11, color: '#A8A29E' }}>Proveedor (primero)</label>
+          <select value={provider} onChange={(e) => pickProvider(e.target.value)} style={inputStyle}>
             {PROVIDERS.map((p) => (
               <option key={p.id} value={p.id}>{p.name} — {p.models}</option>
             ))}
           </select>
-          <label style={{ fontSize: 11, color: '#A8A29E', marginTop: 6, display: 'block' }}>Modelo</label>
-          <input value={model} onChange={(e) => setModel(e.target.value)} list="sc-models" style={inputStyle} />
-          <datalist id="sc-models">
+          <label style={{ fontSize: 11, color: '#A8A29E', marginTop: 6, display: 'block' }}>Modelo (del proveedor)</label>
+          <select
+            value={customModel ? '__custom' : model}
+            onChange={(e) => {
+              if (e.target.value === '__custom') setCustomModel(true)
+              else {
+                setCustomModel(false)
+                setModel(e.target.value)
+              }
+            }}
+            style={inputStyle}
+          >
             {provModels.map((m) => (
-              <option key={m} value={m} />
+              <option key={m} value={m}>{m}</option>
             ))}
-          </datalist>
+            <option value="__custom">✏ personalizado…</option>
+          </select>
+          {customModel && (
+            <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="model-id exacto" style={{ ...inputStyle, marginTop: 6 }} />
+          )}
           <label style={{ fontSize: 11, color: '#A8A29E', marginTop: 6, display: 'block' }}>Temperatura: {temperature.toFixed(1)}</label>
           <input type="range" min={0} max={2} step={0.1} value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} style={{ width: '100%' }} />
         </section>

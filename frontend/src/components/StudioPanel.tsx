@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LiveAgent, ChatMsg } from '../hooks/useLiveOffice'
-import { FATIGUE_META, fatigueOf, PROVIDERS } from '../data/demo'
+import { FATIGUE_META, fatigueOf, PROVIDERS, PROVIDER_MODELS } from '../data/demo'
 import { configuredProviders } from '../hooks/useLiveOffice'
 
 interface Props {
@@ -18,12 +18,13 @@ const MONO = "ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace"
 export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume }: Props) {
   const [tab, setTab] = useState<'studio' | 'chat'>('studio')
   const [input, setInput] = useState('')
-  const [model, setModel] = useState('Claude 3.5 Sonnet')
+  const [provider, setProvider] = useState('anthropic')
+  const [model, setModel] = useState('claude-3-5-sonnet-latest')
 
   const allowed = configuredProviders()
-  const modelOptions = PROVIDERS.filter((p) => allowed.length === 0 || allowed.includes(p.id)).flatMap((p) =>
-    p.models.split('/').map((m) => m.trim()),
-  )
+  const providerOptions = PROVIDERS.filter((p) => allowed.length === 0 || allowed.includes(p.id))
+  const shownProvider = providerOptions.some((p) => p.id === provider) ? provider : (providerOptions[0]?.id ?? provider)
+  const modelOptions = PROVIDER_MODELS[shownProvider] ?? []
   const shownModel = modelOptions.includes(model) ? model : (modelOptions[0] ?? model)
 
   return (
@@ -133,7 +134,21 @@ export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume }:
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', fontSize: 11, color: '#78716C' }}>
           <span>🧠</span>
-          <select value={shownModel} onChange={(e) => setModel(e.target.value)} style={{ flex: 1, border: '1px solid #D6D0BF', borderRadius: 6, padding: 4, fontSize: 11, background: '#fff', fontFamily: MONO }}>
+          <select
+            value={shownProvider}
+            onChange={(e) => {
+              const p = e.target.value
+              setProvider(p)
+              setModel((PROVIDER_MODELS[p] ?? [])[0] ?? '')
+            }}
+            title="Proveedor (primero)"
+            style={{ flex: 1, border: '1px solid #D6D0BF', borderRadius: 6, padding: 4, fontSize: 11, background: '#fff', fontFamily: MONO }}
+          >
+            {providerOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select value={shownModel} onChange={(e) => setModel(e.target.value)} title="Modelo del proveedor" style={{ flex: 2, border: '1px solid #D6D0BF', borderRadius: 6, padding: 4, fontSize: 11, background: '#fff', fontFamily: MONO }}>
             {modelOptions.map((m) => (
               <option key={m}>{m}</option>
             ))}
