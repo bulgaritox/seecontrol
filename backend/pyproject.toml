@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seecontrol-backend"
+version = "1.0.0"
+description = "Multi-Agent Orchestration Platform with BYOK Support"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "SeeControl", email = "seecontrol@localhost"}
+]
+keywords = ["ai", "agents", "orchestration", "byok", "llm", "fastapi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+]
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "sqlalchemy>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.1",
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    "httpx>=0.26.0",
+    "anyio>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "mypy>=1.8.0",
+    "python-multipart>=0.0.6",
+]
+llm = [
+    "anthropic>=0.25.0",
+    "openai>=1.12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/bulgaritox/seecontrol"
+Documentation = "http://localhost:8000/docs"
+Repository = "https://github.com/bulgaritox/seecontrol"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.alembic]
+script_location = "alembic"
+prepend_sys_path = "."
+version_path_separator = "os"
+
+[alembic.post_write_hooks]
+[alembic.post_write_hooks.lint]
+cmd = "black alembic"

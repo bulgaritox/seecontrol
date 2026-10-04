@@ -1,0 +1,33 @@
+# Core Dependencies
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Database
+sqlalchemy>=2.0.25
+asyncpg>=0.29.0
+alembic>=1.13.1
+
+# Authentication
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+
+# HTTP Client
+httpx>=0.26.0
+
+# Async Support
+anyio>=4.0.0
+
+# LLM Providers (optional, installed as needed)
+# anthropic>=0.25.0
+# openai>=1.12.0
+
+# Development
+python-multipart>=0.0.6
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+
+# Type hints
+mypy>=1.8.0
