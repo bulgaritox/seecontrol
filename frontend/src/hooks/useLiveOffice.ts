@@ -357,6 +357,7 @@ export function useLiveOffice() {
     async (text: string) => {
       const clean = text.trim()
       if (!clean) return
+      const title = clean.slice(0, 60)
       setChat((prev) => [...prev, { id: seq++, from: 'Tú', text: clean, mine: true }].slice(-30))
       window.setTimeout(() => {
         setChat((prev) =>
@@ -364,17 +365,36 @@ export function useLiveOffice() {
         )
       }, 900)
       pushActivity('Tú', `inyectaste requerimiento: «${clean}»`, 'warning')
-      setTasks((prev) => [
-        ...prev,
-        { id: `local-${seq}`, title: clean.slice(0, 60), desc: clean, priority: 'medium', status: 'pending', progress: 0, energy: 25 },
-      ])
-      try {
-        await createTask(clean.slice(0, 60), clean)
-      } catch {
-        /* backlog local si el backend no responde */
+      // Orquestador: Boss activo, si no el primer agente encendido
+      const orch = agents.find((a) => a.is_active && a.character === 'boss') ?? agents.find((a) => a.is_active)
+      let newTask: LiveTask = {
+        id: `local-${seq}`, title, desc: clean, priority: 'medium',
+        status: 'pending', progress: 0, agentName: orch?.name, energy: 25,
       }
+      if (!orch) {
+        pushActivity('Sistema', 'no hay agentes encendidos: enciende al menos uno en Studio ⏻', 'error')
+        setTasks((prev) => [...prev, newTask])
+        return
+      }
+      try {
+        const created = await createTask(title, clean)
+        // Asignar al orquestador y ponerla en marcha (esto también lo reactiva si estaba en pausa)
+        await updateTask(created.id, { agent_id: orch.backendId ?? null, status: 'in_progress' }).catch(() => undefined)
+        newTask = { ...newTask, id: created.id, status: 'in_progress', progress: 5 }
+        setAgents((prev) =>
+          prev.map((a) =>
+            a.id === orch.id
+              ? { ...a, status: 'working', task: title, progress: 5, energy: Math.max(a.energy, 40), log: `tomó «${title.slice(0, 24)}…»`, resting: false, meeting: false }
+              : a,
+          ),
+        )
+        pushActivity(orch.name, `${orch.name} tomó «${title}» ▶ (${orch.provider}/${orch.model})`, 'success')
+      } catch {
+        pushActivity('Sistema', 'backend no respondió: la tarea quedó en backlog local', 'warning')
+      }
+      setTasks((prev) => [...prev, newTask])
     },
-    [pushActivity],
+    [pushActivity, agents],
   )
 
   const approveTask = useCallback(

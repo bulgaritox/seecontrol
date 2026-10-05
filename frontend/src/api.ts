@@ -129,8 +129,8 @@ export async function getMissions(): Promise<BackendMission[]> {
   }
 }
 
-export async function createTask(title: string, description: string, priority = 'medium'): Promise<void> {
-  await req('POST', '/api/tasks/', { title, description, priority })
+export async function createTask(title: string, description: string, priority = 'medium'): Promise<{ id: string }> {
+  return req<{ id: string }>('POST', '/api/tasks/', { title, description, priority })
 }
 
 export async function getSkills(): Promise<BackendSkill[]> {

@@ -59,7 +59,14 @@ const DESKS = [
 ]
 const BOSS_POS = { x: 80, y: 42 }
 const COFFEE_POS = { x: 13, y: 52 }
-const REST_POS = [{ x: 9, y: 84 }, { x: 16, y: 84 }, { x: 22, y: 84 }]
+
+// Formación en la sala de descanso: fila ordenada, no regados.
+// Apagados, pausados, en burnout y en reunión van aquí.
+function restSlot(i: number): { x: number; y: number } {
+  return { x: 6 + (i % 4) * 4.4, y: 79 + Math.floor(i / 4) * 7.5 }
+}
+const needsRest = (a: LiveAgent) =>
+  !a.is_active || a.status === 'paused' || a.resting || a.meeting
 
 function Desk({ x, y, t }: { x: number; y: number; t: Theme }) {
   return (
@@ -111,16 +118,18 @@ export function OfficeScene({
     }
   }
 
-  let restIdx = 0
+  const restOrder = [...agents].filter(needsRest).sort((a, b) => a.name.localeCompare(b.name))
+  const restAt = (id: string): { x: number; y: number } => restSlot(Math.max(0, restOrder.findIndex((a) => a.id === id)))
   const posOf = (a: LiveAgent): { x: number; y: number } => {
-    if (a.resting || a.meeting) return REST_POS[restIdx++ % REST_POS.length]
+    if (needsRest(a)) return restAt(a.id)
     if (a.desk === 6) return BOSS_POS
     if (a.desk === 8 || a.character === 'nex') return COFFEE_POS
     if (a.desk === 7) return { x: 45, y: 50 }
     return DESKS[a.desk % DESKS.length]
   }
-  const walkers = agents.filter((a) => a.desk === 7 && !a.resting && !a.meeting)
-  const seated = agents.filter((a) => !(a.desk === 7 && !a.resting && !a.meeting))
+  const isWalker = (a: LiveAgent) => a.desk === 7 && a.is_active && a.status !== 'paused' && !a.resting && !a.meeting
+  const walkers = agents.filter(isWalker)
+  const seated = agents.filter((a) => !isWalker(a))
   const dark = themeId === 'lab'
   const ink = dark ? '#E2E8F0' : '#57534E'
 
@@ -332,7 +341,7 @@ export function OfficeScene({
         const p = posOf(a)
         const fat = fatigueOf(a.energy)
         const aura = !a.is_active ? '#4B5563' : a.resting ? FATIGUE_META.burnout.color : FATIGUE_META[fat].color
-        const showBubble = a.mood || a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss'
+        const showBubble = a.is_active && (a.mood || a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss')
         return (
           <div
             key={a.id}
