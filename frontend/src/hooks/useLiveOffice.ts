@@ -75,6 +75,7 @@ export type Mode = 'demo' | 'prod'
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a)
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
+const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 let seq = 1
 
 const now = () => new Date().toLocaleTimeString('es', { hour12: false })
@@ -447,6 +448,17 @@ export function useLiveOffice() {
         ...prev,
         { id: taskId, title, desc: clean, priority: 'medium', status: 'in_progress', progress: 5, agentName: orch.name, energy: 45 },
       ])
+      const stage = async (progress: number, log: string, feed: string) => {
+        setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, progress, log } : a)))
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, progress } : t)))
+        pushActivity(orch.name, `${orch.name} ${feed}`, 'info')
+        try {
+          await updateTask(taskId, { progress }).catch(() => undefined)
+          if (orch.backendId) await postAgentStatus(orch.backendId, 'working', progress).catch(() => undefined)
+        } catch {
+          /* noop */
+        }
+      }
       setAgents((prev) =>
         prev.map((a) =>
           a.id === orch.id
@@ -461,8 +473,11 @@ export function useLiveOffice() {
         return
       }
       try {
+        await sleep(2500)
+        await stage(25, 'investigando…', 'está investigando 🔍')
         const res = await pingAgent(orch.backendId, clean, 400)
         if (res.ok && res.reply) {
+          await stage(65, 'redactando hoja…', 'está redactando la hoja 📝')
           const doc: LiveDoc = {
             id: `doc-${seq++}`,
             title,
@@ -480,11 +495,12 @@ export function useLiveOffice() {
           )
           pushActivity(orch.name, `${orch.name} entregó documento en la mesa 📄 (${res.tokens ?? '?'} tok)`, 'success')
           try {
-            await updateTask(taskId, { status: 'completed', progress: 100, result: res.reply.slice(0, 500) })
+            await updateTask(taskId, { status: 'completed', progress: 100, result: res.reply.slice(0, 2000), tokens_used: res.tokens ?? 0 })
+            if (orch.backendId) await postAgentStatus(orch.backendId, 'completed', 100).catch(() => undefined)
           } catch {
             /* noop */
           }
-          setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100 } : t)))
+          setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100, result: res.reply } : t)))
           setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, status: 'completed', progress: 100, log: 'entregado ✓' } : a)))
         } else if (res.mood) {
           setMood(orch.id, res.mood)

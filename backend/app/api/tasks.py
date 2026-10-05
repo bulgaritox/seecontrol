@@ -390,6 +390,36 @@ async def update_task(
         task.agent_id = task_data.agent_id
     if task_data.dependencies is not None:
         task.dependencies = task_data.dependencies
+    if task_data.result is not None:
+        task.result = task_data.result
+    if task_data.result_data is not None:
+        task.result_data = task_data.result_data
+    if task_data.tokens_used is not None:
+        task.tokens_used = task_data.tokens_used
+    if task_data.cost is not None:
+        task.cost = task_data.cost
+    if task_data.started_at is not None:
+        task.started_at = task_data.started_at
+    if task_data.completed_at is not None:
+        task.completed_at = task_data.completed_at
+    if task_data.estimated_duration is not None:
+        task.estimated_duration = task_data.estimated_duration
+    if task_data.max_retries is not None:
+        task.max_retries = task_data.max_retries
+    if task_data.retry_count is not None:
+        task.retry_count = task_data.retry_count
+    if task_data.subtasks is not None:
+        task.subtasks = task_data.subtasks
+    if task_data.completed_subtasks is not None:
+        task.completed_subtasks = task_data.completed_subtasks
+    if task_data.metadata is not None:
+        task.task_metadata = task_data.metadata
+    
+    # Timestamps automáticos del ciclo de vida
+    if task.status == TaskStatus.IN_PROGRESS and task.started_at is None:
+        task.started_at = datetime.utcnow()
+    if task.status == TaskStatus.COMPLETED and task.completed_at is None:
+        task.completed_at = datetime.utcnow()
     
     task.updated_at = datetime.utcnow()
     

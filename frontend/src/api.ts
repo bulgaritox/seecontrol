@@ -227,6 +227,7 @@ export interface TaskPatch {
   progress?: number
   agent_id?: string | null
   result?: string
+  tokens_used?: number
 }
 
 export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
