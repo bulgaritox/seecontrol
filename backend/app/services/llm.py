@@ -296,6 +296,72 @@ class LLMService:
         except Exception as e:
             raise LLMError(f"Groq error: {e}", ProviderType.GROQ)
     
+    async def _call_gemini(self, prompt: str, model: str, messages: List[Dict], **kwargs) -> Tuple[str, int]:
+        """Call Google Gemini API (AI Studio). Auth via ?key= query param."""
+        config = llm_config.providers.get(ProviderType.GEMINI)
+        if not config or not config.api_key:
+            raise LLMError("Gemini not configured", ProviderType.GEMINI)
+        
+        client = self.clients.get(ProviderType.GEMINI)
+        if not client:
+            raise LLMError("Gemini client not initialized", ProviderType.GEMINI)
+        
+        # Gemini usa formato propio: contents[].parts[].text (+ systemInstruction)
+        system_text = ""
+        contents = []
+        for m in messages:
+            role = m.get("role", "user")
+            text = m.get("content", "")
+            if role == "system":
+                system_text += text + "\n"
+            else:
+                contents.append({
+                    "role": "model" if role == "assistant" else "user",
+                    "parts": [{"text": text}],
+                })
+        
+        payload: Dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": kwargs.get("max_tokens", 4096),
+                "temperature": kwargs.get("temperature", 0.7),
+            },
+        }
+        if system_text.strip():
+            payload["systemInstruction"] = {"parts": [{"text": system_text.strip()}]}
+        
+        try:
+            response = await client.post(
+                f"/v1beta/models/{model}:generateContent",
+                params={"key": config.api_key},
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract content (ignora partes de thinking)
+            content = ""
+            candidates = data.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                content = "".join(
+                    p.get("text", "") for p in parts
+                    if p.get("text") and not p.get("thought")
+                )
+            
+            # Count tokens
+            usage = data.get("usageMetadata", {})
+            total_tokens = usage.get("totalTokenCount", 0)
+            
+            return content, total_tokens
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                raise LLMError("Rate limit exceeded", ProviderType.GEMINI, retryable=True)
+            raise LLMError(f"Gemini error: {e}", ProviderType.GEMINI)
+        except Exception as e:
+            raise LLMError(f"Gemini error: {e}", ProviderType.GEMINI)
+    
     async def _call_custom(self, prompt: str, model: str, messages: List[Dict], **kwargs) -> Tuple[str, int]:
         """Call custom endpoint"""
         config = llm_config.providers.get(ProviderType.CUSTOM)
@@ -371,6 +437,8 @@ class LLMService:
                     content, tokens = await self._call_deepseek("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
                 elif provider_type == ProviderType.MISTRAL:
                     content, tokens = await self._call_mistral("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
+                elif provider_type == ProviderType.GEMINI:
+                    content, tokens = await self._call_gemini("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
                 elif provider_type == ProviderType.GROQ:
                     content, tokens = await self._call_groq("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
                 elif provider_type == ProviderType.CUSTOM:
@@ -431,6 +499,10 @@ class LLMService:
                 "mistral-large": {"input": 2e-6, "output": 6e-6},
                 "mistral-small": {"input": 0.5e-6, "output": 1.5e-6},
                 "mistral-tiny": {"input": 0.25e-6, "output": 0.75e-6},
+            },
+            "gemini": {
+                "gemini-1.5-flash": {"input": 0.075e-6, "output": 0.3e-6},
+                "gemini-1.5-pro": {"input": 1.25e-6, "output": 5e-6},
             },
             "groq": {
                 "llama-3.1-70b-versatile": {"input": 0.5e-6, "output": 1e-6},

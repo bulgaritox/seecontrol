@@ -15,6 +15,7 @@ class ProviderType(str, Enum):
     OPENAI = "openai"
     DEEPSEEK = "deepseek"
     MISTRAL = "mistral"
+    GEMINI = "gemini"
     GROQ = "groq"
     CUSTOM = "custom"
 
@@ -40,6 +41,7 @@ class LLMProviderConfig(BaseModel):
         ProviderType.OPENAI,
         ProviderType.DEEPSEEK,
         ProviderType.MISTRAL,
+        ProviderType.GEMINI,
         ProviderType.GROQ,
         ProviderType.CUSTOM,
     ]
@@ -93,6 +95,15 @@ llm_config = LLMProviderConfig(
             models=["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
             enabled=settings.GROQ_API_KEY is not None,
             priority=5,
+        ),
+        ProviderType.GEMINI: LLMConfig(
+            provider=ProviderType.GEMINI,
+            api_key=settings.GEMINI_API_KEY,
+            api_url=settings.GEMINI_API_URL,
+            timeout=settings.GEMINI_TIMEOUT,
+            models=["gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"],
+            enabled=settings.GEMINI_API_KEY is not None,
+            priority=6,
         ),
         ProviderType.CUSTOM: LLMConfig(
             provider=ProviderType.CUSTOM,

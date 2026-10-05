@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     MISTRAL_API_URL: AnyHttpUrl = "https://api.mistral.ai"
     MISTRAL_TIMEOUT: int = 60
     
+    # Google Gemini (AI Studio)
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_API_URL: AnyHttpUrl = "https://generativelanguage.googleapis.com"
+    GEMINI_TIMEOUT: int = 60
+    
     # Groq
     GROQ_API_KEY: Optional[str] = None
     GROQ_API_URL: AnyHttpUrl = "https://api.groq.com"

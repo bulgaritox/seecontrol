@@ -65,7 +65,7 @@ export const FAILOVER_ORDER = ['anthropic', 'openai', 'deepseek', 'mistral', 'gr
 export const PROVIDER_MODELS: Record<string, string[]> = {
   openai: ['gpt-4o-mini', 'gpt-4o'],
   anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
-  gemini: ['gemini-1.5-flash', 'gemini-1.5-pro'],
+  gemini: ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
   qwen: ['qwen-2.5-7b-instruct', 'qwen-2.5-72b-instruct'],
   yi: ['yi-large'],
