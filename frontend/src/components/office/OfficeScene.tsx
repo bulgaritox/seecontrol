@@ -102,10 +102,14 @@ export function OfficeScene({
   agents,
   stats,
   onAgentClick,
+  docs = [],
+  onDocClick,
 }: {
   agents: LiveAgent[]
   stats: { total: number; working: number; blocked: number; done: number; global: number; off?: number }
   onAgentClick?: (id: string) => void
+  docs?: { id: string; title: string; fresh: boolean }[]
+  onDocClick?: (id: string) => void
 }) {
   const [themeId, setThemeId] = useState<OfficeThemeId>(() => (localStorage.getItem('sc_theme') as OfficeThemeId) || 'seria')
   const t = THEMES[themeId]
@@ -121,6 +125,7 @@ export function OfficeScene({
   const restOrder = [...agents].filter(needsRest).sort((a, b) => a.name.localeCompare(b.name))
   const restAt = (id: string): { x: number; y: number } => restSlot(Math.max(0, restOrder.findIndex((a) => a.id === id)))
   const posOf = (a: LiveAgent): { x: number; y: number } => {
+    if (a.trip === 'table') return { x: 70, y: 74 }
     if (needsRest(a)) return restAt(a.id)
     if (a.desk === 6) return BOSS_POS
     if (a.desk === 8 || a.character === 'nex') return COFFEE_POS
@@ -174,6 +179,8 @@ export function OfficeScene({
         @keyframes sc-steam { 0% { opacity: 0; transform: translateY(0); } 40% { opacity: .8; } 100% { opacity: 0; transform: translateY(-8px); } }
         .sc-bubble { animation: sc-bob 2.4s ease-in-out infinite; }
         @keyframes sc-bob { 0%,100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,-3px); } }
+        .sc-fresh { animation: sc-fresh 1.6s ease-in-out infinite; }
+        @keyframes sc-fresh { 0%,100% { box-shadow: 0 0 6px #F59E0B; } 50% { box-shadow: 0 0 16px #F59E0B; } }
       `}</style>
 
       <svg viewBox="0 0 960 600" className="sc-px" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
@@ -341,13 +348,16 @@ export function OfficeScene({
         const p = posOf(a)
         const fat = fatigueOf(a.energy)
         const aura = !a.is_active ? '#4B5563' : a.resting ? FATIGUE_META.burnout.color : FATIGUE_META[fat].color
-        const showBubble = a.is_active && (a.mood || a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss')
+        const showBubble = a.is_active && (a.mood || a.trip === 'table' || a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss')
         return (
-          <div
+          <motion.div
             key={a.id}
             title={`${a.name} · ${a.role} (clic para editar)`}
             onClick={() => onAgentClick?.(a.id)}
-            style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%,-100%)', zIndex: 5, cursor: 'pointer', opacity: a.is_active ? 1 : 0.45, filter: a.is_active ? 'none' : 'grayscale(0.8)' }}
+            initial={false}
+            animate={{ left: `${p.x}%`, top: `${p.y}%` }}
+            transition={{ duration: 1.4, ease: 'easeInOut' }}
+            style={{ position: 'absolute', transform: 'translate(-50%,-100%)', zIndex: 5, cursor: 'pointer', opacity: a.is_active ? 1 : 0.45, filter: a.is_active ? 'none' : 'grayscale(0.8)' }}
           >
             {showBubble && (
               <div className="sc-bubble" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translate(-50%,0)', marginBottom: 46, background: a.mood ? '#FEF3C7' : '#fff', color: '#111', fontSize: 10, padding: '4px 8px', borderRadius: 8, border: a.mood ? '2px solid #F59E0B' : '2px solid #111', whiteSpace: a.mood ? 'normal' : 'nowrap', width: a.mood ? 190 : undefined, fontFamily: 'monospace', zIndex: 6 }}>
@@ -362,7 +372,7 @@ export function OfficeScene({
             )}
             <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status={!a.is_active ? 'paused' : a.resting ? 'blocked' : a.status} aura={aura} />
             {nameTag(a)}
-          </div>
+          </motion.div>
         )
       })}
 
@@ -384,6 +394,40 @@ export function OfficeScene({
           </div>
         </motion.div>
       ))}
+
+      {/* hojas de documentos sobre la mesa de juntas (clic = seguir el hilo) */}
+      {docs.slice(0, 4).map((d, i) => (
+        <div
+          key={d.id}
+          onClick={() => onDocClick?.(d.id)}
+          title={`${d.title} — clic para continuar el hilo`}
+          style={{
+            position: 'absolute',
+            left: `${70 + i * 6}%`,
+            top: '56%',
+            width: 36,
+            height: 46,
+            background: d.fresh ? '#FEF3C7' : '#F8FAFC',
+            border: d.fresh ? '2px solid #F59E0B' : '2px solid #94A3B8',
+            borderRadius: 2,
+            cursor: 'pointer',
+            zIndex: 6,
+            transform: `rotate(${(i % 2 === 0 ? -1 : 1) * (4 + i * 2)}deg)`,
+            padding: 3,
+          }}
+          className={d.fresh ? 'sc-fresh' : undefined}
+        >
+          <div style={{ height: 4, background: '#F59E0B', borderRadius: 2, marginBottom: 3 }} />
+          {[0, 1, 2, 3].map((l) => (
+            <div key={l} style={{ height: 3, background: '#CBD5E1', borderRadius: 2, marginBottom: 3, width: `${92 - l * 12}%` }} />
+          ))}
+        </div>
+      ))}
+      {docs.length > 4 && (
+        <div style={{ position: 'absolute', left: '95%', top: '56%', fontSize: 10, fontFamily: 'monospace', background: 'rgba(0,0,0,.7)', color: '#fff', borderRadius: 8, padding: '2px 6px', zIndex: 6 }}>
+          +{docs.length - 4}
+        </div>
+      )}
 
       {/* selector de ambiente */}
       <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 4, zIndex: 10 }}>

@@ -6,6 +6,7 @@ import { ProvidersPanel } from './components/ProvidersPanel'
 import { SkillsPanel } from './components/SkillsPanel'
 import { AgentEditor } from './components/AgentEditor'
 import { TaskDrawer } from './components/TaskDrawer'
+import { DocViewer } from './components/DocViewer'
 import { useLiveOffice } from './hooks/useLiveOffice'
 import { FATIGUE_META, fatigueOf } from './data/demo'
 import { API_URL, WS_URL } from './api'
@@ -26,15 +27,18 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('oficina')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  const [openDocId, setOpenDocId] = useState<string | null>(null)
   const [skillsTick, setSkillsTick] = useState(0)
   const {
-    agents, tasks, activity, chat, stats, backendOk, wsLive, version,
+    agents, tasks, docs, activity, chat, stats, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
     saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
+    openDoc, followUpDoc,
   } = useLiveOffice()
 
   const editing = agents.find((a) => a.id === editingId) ?? null
   const openTask = tasks.find((t) => t.id === openTaskId) ?? null
+  const openDocFull = docs.find((d) => d.id === openDocId) ?? null
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0A0A', color: '#fff', padding: 16, fontFamily: MONO }}>
@@ -127,7 +131,16 @@ export default function App() {
           <main style={{ minWidth: 0 }}>
             {tab === 'oficina' && (
               <>
-                <OfficeScene agents={agents} stats={stats} onAgentClick={setEditingId} />
+                <OfficeScene
+                  agents={agents}
+                  stats={stats}
+                  onAgentClick={setEditingId}
+                  docs={docs}
+                  onDocClick={(id) => {
+                    openDoc(id)
+                    setOpenDocId(id)
+                  }}
+                />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
                   {/* feed */}
                   <div style={{ background: '#111', border: '1px solid #2A2A2A', borderRadius: 10, padding: 10, maxHeight: 260, overflowY: 'auto' }}>
@@ -210,6 +223,11 @@ export default function App() {
           onControl={taskControl}
           onExtend={extendTask}
         />
+      )}
+
+      {/* visor de documento */}
+      {openDocFull && (
+        <DocViewer doc={openDocFull} onClose={() => setOpenDocId(null)} onFollowUp={followUpDoc} />
       )}
     </div>
   )

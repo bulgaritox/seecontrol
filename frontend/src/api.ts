@@ -177,8 +177,8 @@ export interface PingResult {
   mood?: AgentMood
 }
 
-export async function pingAgent(id: string, message?: string): Promise<PingResult> {
-  return req<PingResult>('POST', `/api/agents/${id}/ping`, { message: message ?? 'Responde solo: OK' })
+export async function pingAgent(id: string, message?: string, maxTokens?: number): Promise<PingResult> {
+  return req<PingResult>('POST', `/api/agents/${id}/ping`, { message: message ?? 'Responde solo: OK', max_tokens: maxTokens ?? 15 })
 }
 
 export async function createAgent(payload: Record<string, unknown>): Promise<void> {

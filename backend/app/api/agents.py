@@ -618,6 +618,7 @@ async def get_agent_office_state(
 class AgentPing(BaseModel):
     """Tiny test message for an agent (minimal tokens)"""
     message: Optional[str] = "Responde solo: OK"
+    max_tokens: Optional[int] = 15
 
 
 # ============================================
@@ -662,18 +663,20 @@ async def ping_agent(
         provider = ProviderType.MISTRAL
     
     model = agent.model or "mistral-small-latest"
-    question = (payload.message or "Responde solo: OK").strip()[:200]
+    question = (payload.message or "Responde solo: OK").strip()[:1500]
+    # Tope de seguridad: pruebas mínimas por defecto, respuestas reales hasta 800
+    max_tokens = min(max(payload.max_tokens or 15, 5), 800)
     
     try:
         content, tokens, used = await llm_service.chat(
             provider=provider,
             model=model,
             messages=[
-                {"role": "system", "content": f"Eres {agent.name}, {agent.role} del equipo SeeControl. Responde en una sola línea."},
+                {"role": "system", "content": f"Eres {agent.name}, {agent.role} del equipo SeeControl. Responde en español, claro y directo."},
                 {"role": "user", "content": question},
             ],
-            max_tokens=15,
-            temperature=0,
+            max_tokens=max_tokens,
+            temperature=0.3,
         )
         return {
             "ok": True,

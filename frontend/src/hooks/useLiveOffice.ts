@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROSTER, CHATTER, ACTIVITY_TPL, fatigueOf } from '../data/demo'
 import {
   ensureAuth, getAgents, getTasks, createTask, updateAgent, updateTask, postAgentStatus,
-  createAgent, deleteAgent, connectOfficeWS, getHealth, type AgentPatch, type AgentMood,
+  createAgent, deleteAgent, pingAgent, connectOfficeWS, getHealth, type AgentPatch, type AgentMood,
 } from '../api'
 
 export interface LiveAgent {
@@ -26,6 +26,7 @@ export interface LiveAgent {
   resting: boolean
   meeting: boolean
   is_active: boolean
+  trip?: 'table' | null
   mood?: AgentMood
   backendId?: string
 }
@@ -55,6 +56,18 @@ export interface ChatMsg {
   role?: string
   text: string
   mine?: boolean
+}
+
+export interface LiveDoc {
+  id: string
+  title: string
+  question: string
+  full: string
+  agentName: string
+  agentId: string
+  fresh: boolean
+  time: string
+  taskId?: string
 }
 
 export type Mode = 'demo' | 'prod'
@@ -129,6 +142,7 @@ export function useLiveOffice() {
   const [backendOk, setBackendOk] = useState(false)
   const [wsLive, setWsLive] = useState(false)
   const [version, setVersion] = useState('1.0.0')
+  const [docs, setDocs] = useState<LiveDoc[]>([])
   const tickRef = useRef(0)
   const modeRef = useRef(mode)
   modeRef.current = mode
@@ -359,40 +373,79 @@ export function useLiveOffice() {
       if (!clean) return
       const title = clean.slice(0, 60)
       setChat((prev) => [...prev, { id: seq++, from: 'Tú', text: clean, mine: true }].slice(-30))
-      window.setTimeout(() => {
-        setChat((prev) =>
-          [...prev, { id: seq++, from: 'Boss', role: 'Orquestador', text: `Recibido: «${clean}» → lo desgloso en micro-tareas y asigno al equipo. ✅` }].slice(-30),
-        )
-      }, 900)
-      pushActivity('Tú', `inyectaste requerimiento: «${clean}»`, 'warning')
       // Orquestador: Boss activo, si no el primer agente encendido
       const orch = agents.find((a) => a.is_active && a.character === 'boss') ?? agents.find((a) => a.is_active)
-      let newTask: LiveTask = {
-        id: `local-${seq}`, title, desc: clean, priority: 'medium',
-        status: 'pending', progress: 0, agentName: orch?.name, energy: 25,
-      }
       if (!orch) {
         pushActivity('Sistema', 'no hay agentes encendidos: enciende al menos uno en Studio ⏻', 'error')
-        setTasks((prev) => [...prev, newTask])
+        return
+      }
+      pushActivity('Tú', `inyectaste requerimiento: «${clean}»`, 'warning')
+      let taskId = `local-${seq}`
+      // 1. Crear + asignar la misión en el backend (el orquestador la toma y camina a la mesa)
+      try {
+        const created = await createTask(title, clean)
+        taskId = created.id
+        if (orch.backendId) {
+          await updateTask(taskId, { agent_id: orch.backendId, status: 'in_progress' }).catch(() => undefined)
+        }
+      } catch {
+        pushActivity('Sistema', 'backend no respondió al crear: sigo en local', 'warning')
+      }
+      setTasks((prev) => [
+        ...prev,
+        { id: taskId, title, desc: clean, priority: 'medium', status: 'in_progress', progress: 5, agentName: orch.name, energy: 45 },
+      ])
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === orch.id
+            ? { ...a, status: 'working', task: title, progress: 5, energy: Math.max(a.energy, 40), log: 'ejecutando…', resting: false, meeting: false, trip: 'table' as const }
+            : a,
+        ),
+      )
+      pushActivity(orch.name, `${orch.name} tomó «${title}» ▶ (${orch.provider}/${orch.model})`, 'success')
+      // 2. Ejecutar de verdad con su proveedor (respuesta real, no anuncio)
+      if (!orch.backendId) {
+        pushActivity(orch.name, `${orch.name} es local: sin backend no puede ejecutar`, 'warning')
         return
       }
       try {
-        const created = await createTask(title, clean)
-        // Asignar al orquestador y ponerla en marcha (esto también lo reactiva si estaba en pausa)
-        await updateTask(created.id, { agent_id: orch.backendId ?? null, status: 'in_progress' }).catch(() => undefined)
-        newTask = { ...newTask, id: created.id, status: 'in_progress', progress: 5 }
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === orch.id
-              ? { ...a, status: 'working', task: title, progress: 5, energy: Math.max(a.energy, 40), log: `tomó «${title.slice(0, 24)}…»`, resting: false, meeting: false }
-              : a,
-          ),
-        )
-        pushActivity(orch.name, `${orch.name} tomó «${title}» ▶ (${orch.provider}/${orch.model})`, 'success')
+        const res = await pingAgent(orch.backendId, clean, 400)
+        if (res.ok && res.reply) {
+          const doc: LiveDoc = {
+            id: `doc-${seq++}`,
+            title,
+            question: clean,
+            full: res.reply,
+            agentName: orch.name,
+            agentId: orch.id,
+            fresh: true,
+            time: now(),
+            taskId,
+          }
+          setDocs((prev) => [doc, ...prev].slice(0, 12))
+          setChat((prev) =>
+            [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Dejé la hoja en la mesa de juntas — tócala para seguir el hilo. (${res.tokens ?? '?'} tok)` }].slice(-30),
+          )
+          pushActivity(orch.name, `${orch.name} entregó documento en la mesa 📄 (${res.tokens ?? '?'} tok)`, 'success')
+          try {
+            await updateTask(taskId, { status: 'completed', progress: 100, result: res.reply.slice(0, 500) })
+          } catch {
+            /* noop */
+          }
+          setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100 } : t)))
+          setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, status: 'completed', progress: 100, log: 'entregado ✓' } : a)))
+        } else if (res.mood) {
+          setMood(orch.id, res.mood)
+          setChat((prev) => [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: res.mood!.headline }].slice(-30))
+          pushActivity(orch.name, `${res.mood.headline}`, 'warning')
+        }
       } catch {
-        pushActivity('Sistema', 'backend no respondió: la tarea quedó en backlog local', 'warning')
+        pushActivity(orch.name, `${orch.name} no pudo ejecutar (red local)`, 'error')
+      } finally {
+        window.setTimeout(() => {
+          setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, trip: null } : a)))
+        }, 9000)
       }
-      setTasks((prev) => [...prev, newTask])
     },
     [pushActivity, agents],
   )
@@ -617,9 +670,47 @@ export function useLiveOffice() {
     }
   }, [])
 
+  const openDoc = useCallback((id: string) => {
+    setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, fresh: false } : d)))
+  }, [])
+
+  const followUpDoc = useCallback(
+    async (docId: string, text: string) => {
+      const clean = text.trim()
+      if (!clean) return
+      const doc = docs.find((d) => d.id === docId)
+      if (!doc) return
+      const ag = agents.find((a) => a.id === doc.agentId)
+      pushActivity(ag?.name ?? doc.agentName, `continúa el hilo de «${doc.title}» 🧵`, 'info')
+      if (!ag?.backendId) return
+      try {
+        const res = await pingAgent(
+          ag.backendId,
+          `Hilo sobre: ${doc.question}\nRespuesta dada: ${doc.full.slice(0, 1500)}\nSeguimiento del usuario: ${clean}`,
+          300,
+        )
+        if (res.ok && res.reply) {
+          setDocs((prev) =>
+            prev.map((d) =>
+              d.id === docId ? { ...d, full: `${d.full}\n\n▶ ${clean}\n${res.reply}`, fresh: true, time: now() } : d,
+            ),
+          )
+          pushActivity(ag.name, `${ag.name} amplió la hoja 📄 (+${res.tokens ?? '?'} tok)`, 'success')
+        } else if (res.mood) {
+          setMood(ag.id, res.mood)
+          pushActivity(ag.name, res.mood.headline, 'warning')
+        }
+      } catch {
+        pushActivity(ag.name, `${ag.name} no pudo continuar el hilo (red)`, 'error')
+      }
+    },
+    [docs, agents, pushActivity, setMood],
+  )
+
   return {
-    agents, tasks, activity, chat, stats, backendOk, wsLive, version,
+    agents, tasks, docs, activity, chat, stats, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
-    saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood, fatigueOf,
+    saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
+    openDoc, followUpDoc, fatigueOf,
   }
 }
