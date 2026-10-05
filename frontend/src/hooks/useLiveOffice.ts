@@ -40,6 +40,7 @@ export interface LiveTask {
   progress: number
   agentName?: string
   energy: number
+  result?: string
 }
 
 export interface ActivityItem {
@@ -142,8 +143,15 @@ export function useLiveOffice() {
   const [backendOk, setBackendOk] = useState(false)
   const [wsLive, setWsLive] = useState(false)
   const [version, setVersion] = useState('1.0.0')
-  const [docs, setDocs] = useState<LiveDoc[]>([])
+  const [docs, setDocs] = useState<LiveDoc[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sc_docs') ?? '[]') as LiveDoc[]
+    } catch {
+      return []
+    }
+  })
   const tickRef = useRef(0)
+  const knownTasks = useRef<Set<string>>(new Set())
   const modeRef = useRef(mode)
   modeRef.current = mode
   const prevStatus = useRef<Record<string, string>>({})
@@ -151,6 +159,46 @@ export function useLiveOffice() {
   const pushActivity = useCallback((agent: string, text: string, kind: ActivityItem['kind']) => {
     setActivity((prev) => [{ id: seq++, time: now(), agent, text, kind }, ...prev].slice(0, 30))
   }, [])
+
+  // Persistir hojas + hidratar desde tareas completadas con entregable
+  useEffect(() => {
+    try {
+      localStorage.setItem('sc_docs', JSON.stringify(docs.slice(0, 12)))
+    } catch {
+      /* noop */
+    }
+  }, [docs])
+
+  useEffect(() => {
+    setDocs((prev) => {
+      const have = new Set(prev.filter((d) => d.taskId).map((d) => d.taskId as string))
+      const next = [...prev]
+      let changed = false
+      for (const t of tasks) {
+        if (t.status === 'completed' && t.result && !have.has(t.id)) {
+          next.unshift({
+            id: `doc-${t.id}`,
+            title: t.title,
+            question: t.desc,
+            full: t.result,
+            agentName: t.agentName ?? 'Boss',
+            agentId: agents.find((a) => a.name === t.agentName)?.id ?? '',
+            fresh: false,
+            time: now(),
+            taskId: t.id,
+          })
+          changed = true
+        }
+      }
+      // Solo depurar hojas huérfanas cuando ya conocemos el estado del backend
+      if (knownTasks.current.size > 0) {
+        const kept = next.filter((d) => !d.taskId || d.taskId.startsWith('local-') || knownTasks.current.has(d.taskId))
+        if (kept.length !== next.length) return kept
+      }
+      return changed ? next.slice(0, 12) : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks])
 
   const setMode = useCallback((m: Mode) => {
     localStorage.setItem('sc_mode', m)
@@ -200,6 +248,7 @@ export function useLiveOffice() {
           )
         }
         if (bTasks.length > 0) {
+          knownTasks.current = new Set(bTasks.map((t) => t.id))
           setTasks(
             bTasks.map((t) => ({
               id: t.id,
@@ -210,6 +259,7 @@ export function useLiveOffice() {
               progress: Math.round(t.progress),
               agentName: bAgents.find((x) => x.id === t.agent_id)?.name,
               energy: Math.round(rnd(30, 80)),
+              result: t.result ?? undefined,
             })),
           )
         }
@@ -264,6 +314,7 @@ export function useLiveOffice() {
           ),
         )
         if (bTasks.length > 0) {
+          knownTasks.current = new Set(bTasks.map((t) => t.id))
           setTasks(
             bTasks.map((t) => {
               const an = bAgents.find((x) => x.id === t.agent_id)?.name
@@ -276,6 +327,7 @@ export function useLiveOffice() {
                 progress: Math.round(t.progress),
                 agentName: an,
                 energy: an ? prodEnergy(bAgents.find((x) => x.id === t.agent_id)?.status ?? 'idle', t.progress) : 50,
+                result: t.result ?? undefined,
               }
             }),
           )

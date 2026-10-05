@@ -66,6 +66,12 @@ export function TaskDrawer({ task, agent, onClose, onControl, onExtend }: Props)
         </div>
         <div style={{ fontSize: 14, fontWeight: 'bold', color: '#fff', marginTop: 6 }}>{task.title}</div>
         <div style={{ fontSize: 11, color: '#A8A29E', marginTop: 4, whiteSpace: 'pre-wrap' }}>{task.desc}</div>
+        {task.result && (
+          <div style={{ marginTop: 8, background: '#FFFBEB', border: '2px solid #F59E0B', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 10, fontFamily: GB, color: '#92400E', marginBottom: 4 }}>📄 ENTREGABLE EN LA MESA</div>
+            <div style={{ fontSize: 12, color: '#1F2937', whiteSpace: 'pre-wrap', maxHeight: 180, overflowY: 'auto' }}>{task.result}</div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 11, color: '#78716C' }}>
           <span style={{ textTransform: 'uppercase' }}>{task.priority}</span>
           <span>·</span>

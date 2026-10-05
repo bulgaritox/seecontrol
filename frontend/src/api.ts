@@ -28,6 +28,7 @@ export interface BackendTask {
   status: string
   progress: number
   agent_id?: string | null
+  result?: string | null
 }
 
 export interface BackendMission {
