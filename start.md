@@ -2,6 +2,10 @@
 
 Plataforma de orquestación multi-agente con oficina virtual pixel-art estilo GameBoy Pokémon.
 
+> 🗺️ **Mapa de arquitectura y convergencia:** ver [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+> Explica dónde vive cada cosa y **qué archivos tocar juntos** al ajustar el backend
+> (proveedores LLM, agentes del ROSTER, modelo de datos, endpoints, WebSocket).
+
 ## ✅ Setup verificado en Windows (Oct 2026)
 
 Backend en **PostgreSQL real** + frontend plataforma completa (Studio/Chat, Oficina en vivo,
@@ -29,7 +33,7 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 Usuario demo: `admin@seecontrol.io` / `admin123` (rol owner). Login por formulario
 OAuth2 (`username` + `password`) en `POST /api/users/login`. Los POST de colección
-usan trailing slash (`/api/agents/`, `/api/tasks/`, `/api/missions/`, `/api/skills/`).
+usan trailing slash (`/api/agents/`, `/api/tasks/`, `/api2/missions/`, `/api/skills/`).
 
 Bugs corregidos vs. repo original: doble prefijo de routers (`/api/users/users/...`),
 `TaskResponse` incompleto, helpers WS faltantes (`broadcast_mission_update`,

@@ -104,12 +104,14 @@ export function OfficeScene({
   onAgentClick,
   docs = [],
   onDocClick,
+  selectedId = null,
 }: {
   agents: LiveAgent[]
   stats: { total: number; working: number; blocked: number; done: number; global: number; off?: number }
   onAgentClick?: (id: string) => void
   docs?: { id: string; title: string; fresh: boolean }[]
   onDocClick?: (id: string) => void
+  selectedId?: string | null
 }) {
   const [themeId, setThemeId] = useState<OfficeThemeId>(() => (localStorage.getItem('sc_theme') as OfficeThemeId) || 'seria')
   const t = THEMES[themeId]
@@ -349,15 +351,16 @@ export function OfficeScene({
         const fat = fatigueOf(a.energy)
         const aura = !a.is_active ? '#4B5563' : a.resting ? FATIGUE_META.burnout.color : FATIGUE_META[fat].color
         const showBubble = a.is_active && (a.mood || a.trip === 'table' || a.status === 'working' || a.status === 'blocked' || a.status === 'thinking' || a.status === 'paused' || a.resting || a.meeting || a.character === 'boss')
+        const isSel = selectedId === a.id
         return (
           <motion.div
             key={a.id}
-            title={`${a.name} · ${a.role} (clic para editar)`}
+            title={`${a.name} · ${a.role} — clic para chatear 💬`}
             onClick={() => onAgentClick?.(a.id)}
             initial={false}
-            animate={{ left: `${p.x}%`, top: `${p.y}%` }}
+            animate={{ left: `${p.x}%`, top: `${p.y}%`, scale: isSel ? 1.12 : 1 }}
             transition={{ duration: 1.4, ease: 'easeInOut' }}
-            style={{ position: 'absolute', transform: 'translate(-50%,-100%)', zIndex: 5, cursor: 'pointer', opacity: a.is_active ? 1 : 0.45, filter: a.is_active ? 'none' : 'grayscale(0.8)' }}
+            style={{ position: 'absolute', transform: 'translate(-50%,-100%)', zIndex: isSel ? 8 : 5, cursor: 'pointer', opacity: a.is_active ? 1 : 0.45, filter: a.is_active ? 'none' : 'grayscale(0.8)' }}
           >
             {showBubble && (
               <div className="sc-bubble" style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translate(-50%,0)', marginBottom: 46, background: a.mood ? '#FEF3C7' : '#fff', color: '#111', fontSize: 10, padding: '4px 8px', borderRadius: 8, border: a.mood ? '2px solid #F59E0B' : '2px solid #111', whiteSpace: a.mood ? 'normal' : 'nowrap', width: a.mood ? 190 : undefined, fontFamily: 'monospace', zIndex: 6 }}>
@@ -370,7 +373,7 @@ export function OfficeScene({
                 ) : bubbleFor(a)}
               </div>
             )}
-            <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status={!a.is_active ? 'paused' : a.resting ? 'blocked' : a.status} aura={aura} />
+            <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status={!a.is_active ? 'paused' : a.resting ? 'blocked' : a.status} aura={aura} selected={isSel} />
             {nameTag(a)}
           </motion.div>
         )
@@ -380,7 +383,8 @@ export function OfficeScene({
       {walkers.map((a) => (
         <motion.div
           key={a.id}
-          style={{ position: 'absolute', left: '30%', top: '44%', zIndex: 5, cursor: 'pointer' }}
+          title={`${a.name} · ${a.role} — clic para chatear 💬`}
+          style={{ position: 'absolute', left: '30%', top: '44%', zIndex: selectedId === a.id ? 8 : 5, cursor: 'pointer' }}
           animate={{ left: ['30%', '60%', '60%', '30%', '30%'], top: ['44%', '44%', '62%', '62%', '44%'] }}
           transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
           onClick={() => onAgentClick?.(a.id)}
@@ -389,7 +393,7 @@ export function OfficeScene({
             <div className="sc-bubble" style={{ position: 'absolute', bottom: '100%', left: '50%', marginBottom: 46, background: '#fff', color: '#111', fontSize: 10, padding: '4px 8px', borderRadius: 8, border: '2px solid #111', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
               🚶 {bubbleFor(a)}
             </div>
-            <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status="working" aura={FATIGUE_META[fatigueOf(a.energy)].color} />
+            <AgentSprite hair={a.hair} shirt={a.shirt} cut={a.cut} px={4} status="working" aura={FATIGUE_META[fatigueOf(a.energy)].color} selected={selectedId === a.id} />
             {nameTag(a)}
           </div>
         </motion.div>

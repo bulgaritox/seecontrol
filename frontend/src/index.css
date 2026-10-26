@@ -90,10 +90,9 @@ html {
 }
 
 /* ============================================
-   FUENTE GAMEBOY (IMPORTADA)
+   FUENTE GAMEBOY
+   La fuente Press Start 2P se carga vía <link> en index.html.
    ============================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
 /* Fuente alternativa si Press Start 2P no carga */
 @font-face {

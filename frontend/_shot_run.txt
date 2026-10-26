@@ -1,0 +1,6 @@
+﻿DONE
+oficina=OK {"title":"SeeControl - Orquestaci├│n Multi-Agente | BYOK Pixel Art Office","rootChildren":1}
+kanban=OK {"title":"SeeControl - Orquestaci├│n Multi-Agente | BYOK Pixel Art Office","rootChildren":1}
+skills=OK {"title":"SeeControl - Orquestaci├│n Multi-Agente | BYOK Pixel Art Office","rootChildren":1}
+proveedores=OK {"title":"SeeControl - Orquestaci├│n Multi-Agente | BYOK Pixel Art Office","rootChildren":1}
+agente=OK {"title":"SeeControl - Orquestaci├│n Multi-Agente | BYOK Pixel Art Office","rootChildren":1}

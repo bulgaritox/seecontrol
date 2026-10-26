@@ -22,7 +22,7 @@ from ..services.auth import auth_service
 from ..services.orchestration import orchestration_service
 from ..services.llm import llm_service, LLMError
 from ..services.moods import mood_for
-from ..config.llm import ProviderType
+from ..config.llm import ProviderType, provider_catalog
 from ..config.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agents"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
+
+
+# ============================================
+# PROVIDER / MODEL CATALOG
+# ============================================
+
+@router.get("/providers")
+async def get_providers(token: str = Depends(oauth2_scheme)):
+    """Catálogo de proveedores y modelos permitidos que integra la plataforma.
+
+    Es la fuente de verdad para los selectores de la UI: solo modelos verificados
+    por proveedor, con flag de habilitado (según haya API key en el backend).
+    """
+    if not auth_service.verify_token(token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return {"providers": provider_catalog()}
 
 
 # ============================================
@@ -662,10 +678,10 @@ async def ping_agent(
     except ValueError:
         provider = ProviderType.MISTRAL
     
-    model = agent.model or "mistral-small-latest"
-    question = (payload.message or "Responde solo: OK").strip()[:1500]
-    # Tope de seguridad: pruebas mínimas por defecto, respuestas reales hasta 800
-    max_tokens = min(max(payload.max_tokens or 15, 5), 800)
+    model = agent.model or "ministral-3b-latest"
+    question = (payload.message or "Responde solo: OK").strip()[:4000]
+    # Tope: mínimo 16 (Vercel exige >=16), respuestas reales hasta 2048.
+    max_tokens = min(max(payload.max_tokens or 256, 16), 2048)
     
     try:
         content, tokens, used = await llm_service.chat(

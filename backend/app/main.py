@@ -22,6 +22,7 @@ from .services.auth import auth_service
 from .services.llm import llm_service
 from .services.orchestration import orchestration_service
 from .services.token_manager import token_manager
+from .services.seed import seed_initial_data
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +45,10 @@ async def lifespan_manager(app: FastAPI) -> AsyncGenerator[None, None]:
     # Initialize database
     await init_db()
     logger.info("Database initialized")
+    
+    # Seed inicial: usuario admin + workspace + agentes del ROSTER (idempotente)
+    await seed_initial_data()
+    logger.info("Initial seed ready")
     
     # Initialize LLM service
     await llm_service.initialize()

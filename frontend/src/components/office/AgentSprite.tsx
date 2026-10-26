@@ -71,9 +71,10 @@ interface Props {
   px?: number
   status?: string
   aura?: string
+  selected?: boolean
 }
 
-export function AgentSprite({ hair, shirt, cut = 'short', px = 4, status = 'idle', aura = 'transparent' }: Props) {
+export function AgentSprite({ hair, shirt, cut = 'short', px = 4, status = 'idle', aura = 'transparent', selected = false }: Props) {
   const [frame, setFrame] = useState(0)
   const moving = status === 'working' || status === 'progress'
   const head = cut === 'long' ? HEAD_LONG : cut === 'spiky' ? HEAD_SPIKY : HEAD_SHORT
@@ -102,11 +103,37 @@ export function AgentSprite({ hair, shirt, cut = 'short', px = 4, status = 'idle
   return (
     <div style={{ position: 'relative', width: W, height: H + 8 }}>
       <style>{`
-        @keyframes sc-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+        @keyframes sc-bob { 0%,100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-3px) scaleY(1.02); } }
         @keyframes sc-work { 0%,100% { transform: translateY(0) rotate(-2deg); } 25% { transform: translateY(-4px) rotate(2deg); } 75% { transform: translateY(1px) rotate(-1deg); } }
         @keyframes sc-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
         @keyframes sc-sway { 0%,100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+        @keyframes sc-shadow { 0%,100% { transform: translateX(-50%) scaleX(1); opacity:.85; } 50% { transform: translateX(-50%) scaleX(.82); opacity:.6; } }
+        @keyframes sc-ring { 0%,100% { opacity:.55; transform: translateX(-50%) scale(1); } 50% { opacity:1; transform: translateX(-50%) scale(1.08); } }
+        @keyframes sc-done-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
       `}</style>
+      {/* anillo de "agente seleccionado" (indicador sombreado) */}
+      {selected && (
+        <div
+          style={{
+            position: 'absolute', bottom: -2, left: '50%',
+            width: W * 1.25, height: 16, borderRadius: '50%',
+            border: `2px solid ${shirt}`,
+            boxShadow: `0 0 12px ${shirt}`,
+            animation: 'sc-ring 1.6s ease-in-out infinite',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+      {/* sombra proyectada que "respira" con el bob */}
+      <div
+        style={{
+          position: 'absolute', bottom: 1, left: '50%',
+          width: W * 0.8, height: 7, borderRadius: '50%',
+          background: 'rgba(0,0,0,.35)',
+          animation: moving ? 'sc-shadow .6s ease-in-out infinite' : 'sc-shadow 2.4s ease-in-out infinite',
+          pointerEvents: 'none',
+        }}
+      />
       {/* aura de fatiga */}
       <div
         style={{
@@ -146,6 +173,15 @@ export function AgentSprite({ hair, shirt, cut = 'short', px = 4, status = 'idle
         }}
       >
         <div style={{ position: 'absolute', top: 0, left: 0, width: px, height: px, boxShadow: headShadow }} />
+        {/* parpadeo: tapa los ojos un instante cada ~3.5s cuando no está en burnout */}
+        {!burn && (
+          <div
+            style={{
+              position: 'absolute', top: 5 * px, left: 4 * px, width: 4 * px, height: px,
+              background: SKIN, animation: 'sc-eyeblink 3.6s steps(1) infinite',
+            }}
+          />
+        )}
         <div
           style={{
             position: 'absolute', top: 0, left: 0, width: px, height: px,
@@ -159,6 +195,7 @@ export function AgentSprite({ hair, shirt, cut = 'short', px = 4, status = 'idle
           }}
         />
       </div>
+      <style>{`@keyframes sc-eyeblink { 0%,96%,100% { opacity: 0; } 98% { opacity: 1; } }`}</style>
     </div>
   )
 }

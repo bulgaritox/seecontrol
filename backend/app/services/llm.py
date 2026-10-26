@@ -74,6 +74,15 @@ class LLMService:
                 headers["Authorization"] = f"Bearer {config.api_key}"
             elif provider == ProviderType.GROQ:
                 headers["Authorization"] = f"Bearer {config.api_key}"
+            elif provider in (
+                ProviderType.OPENROUTER, ProviderType.NVIDIA,
+                ProviderType.CLOUDFLARE, ProviderType.VERCEL,
+            ):
+                headers["Authorization"] = f"Bearer {config.api_key}"
+                if provider == ProviderType.OPENROUTER:
+                    # OpenRouter recomienda estos headers de atribución
+                    headers["HTTP-Referer"] = "https://seecontrol.local"
+                    headers["X-Title"] = "SeeControl"
             elif provider == ProviderType.CUSTOM:
                 headers["Authorization"] = f"Bearer {config.api_key}"
         
@@ -296,6 +305,61 @@ class LLMService:
         except Exception as e:
             raise LLMError(f"Groq error: {e}", ProviderType.GROQ)
     
+    # Path del endpoint chat por proveedor OpenAI-compatible.
+    # OJO: la base_url de OpenRouter ya incluye "/api", por eso aquí NO se repite.
+    _OPENAI_COMPAT_PATHS = {
+        ProviderType.OPENROUTER: "/v1/chat/completions",
+        ProviderType.NVIDIA: "/v1/chat/completions",
+        ProviderType.CLOUDFLARE: "/ai/v1/chat/completions",
+        ProviderType.VERCEL: "/v1/chat/completions",
+    }
+
+    async def _call_openai_compatible(self, provider: ProviderType, model: str, messages: List[Dict], **kwargs) -> Tuple[str, int]:
+        """Llamada genérica a proveedores con API estilo OpenAI
+        (OpenRouter, NVIDIA, Cloudflare, Vercel AI Gateway)."""
+        config = llm_config.providers.get(provider)
+        if not config or not config.api_key:
+            raise LLMError(f"{provider.value} not configured", provider)
+        client = self.clients.get(provider)
+        if not client:
+            raise LLMError(f"{provider.value} client not initialized", provider)
+
+        # base_url de Cloudflare ya incluye la cuenta; el resto usa su host raíz.
+        path = self._OPENAI_COMPAT_PATHS.get(provider, "/v1/chat/completions")
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": kwargs.get("max_tokens", 4096),
+            "temperature": kwargs.get("temperature", 0.7),
+        }
+        try:
+            response = await client.post(path, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            content = ""
+            if data.get("choices"):
+                content = data["choices"][0].get("message", {}).get("content", "") or ""
+            usage = data.get("usage", {}) or {}
+            total_tokens = usage.get("total_tokens") or (
+                (usage.get("prompt_tokens", 0) or 0) + (usage.get("completion_tokens", 0) or 0)
+            )
+            if not content:
+                raise LLMError(f"{provider.value}: respuesta vacía", provider)
+            return content, total_tokens
+        except httpx.HTTPStatusError as e:
+            body = ""
+            try:
+                body = e.response.text[:200]
+            except Exception:
+                pass
+            if e.response.status_code == 429:
+                raise LLMError(f"{provider.value}: rate limit / sin saldo", provider, retryable=True)
+            raise LLMError(f"{provider.value} error {e.response.status_code}: {body}", provider)
+        except LLMError:
+            raise
+        except Exception as e:
+            raise LLMError(f"{provider.value} error: {e}", provider)
+
     async def _call_gemini(self, prompt: str, model: str, messages: List[Dict], **kwargs) -> Tuple[str, int]:
         """Call Google Gemini API (AI Studio). Auth via ?key= query param."""
         config = llm_config.providers.get(ProviderType.GEMINI)
@@ -441,6 +505,11 @@ class LLMService:
                     content, tokens = await self._call_gemini("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
                 elif provider_type == ProviderType.GROQ:
                     content, tokens = await self._call_groq("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
+                elif provider_type in (
+                    ProviderType.OPENROUTER, ProviderType.NVIDIA,
+                    ProviderType.CLOUDFLARE, ProviderType.VERCEL,
+                ):
+                    content, tokens = await self._call_openai_compatible(provider_type, model, messages, max_tokens=max_tokens, temperature=temperature)
                 elif provider_type == ProviderType.CUSTOM:
                     content, tokens = await self._call_custom("", model, messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
                 else:

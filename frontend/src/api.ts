@@ -182,6 +182,24 @@ export async function pingAgent(id: string, message?: string, maxTokens?: number
   return req<PingResult>('POST', `/api/agents/${id}/ping`, { message: message ?? 'Responde solo: OK', max_tokens: maxTokens ?? 15 })
 }
 
+export interface ProviderCatalogEntry {
+  id: string
+  label: string
+  enabled: boolean
+  models: string[]
+  note: string
+  default_model: string | null
+}
+
+export async function getProviders(): Promise<ProviderCatalogEntry[]> {
+  try {
+    const data = await req<{ providers: ProviderCatalogEntry[] }>('GET', '/api/agents/providers')
+    return data.providers ?? []
+  } catch {
+    return []
+  }
+}
+
 export async function createAgent(payload: Record<string, unknown>): Promise<void> {
   await req('POST', '/api/agents/', payload)
 }

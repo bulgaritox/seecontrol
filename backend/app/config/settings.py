@@ -98,14 +98,38 @@ class Settings(BaseSettings):
     
     # Groq
     GROQ_API_KEY: Optional[str] = None
-    GROQ_API_URL: AnyHttpUrl = "https://api.groq.com"
+    GROQ_API_URL: AnyHttpUrl = "https://api.groq.com/openai"
     GROQ_TIMEOUT: int = 60
-    
+
+    # OpenRouter (OpenAI-compatible)
+    OPENROUTER_API_KEY: Optional[str] = None
+    OPENROUTER_API_URL: AnyHttpUrl = "https://openrouter.ai/api"
+    OPENROUTER_TIMEOUT: int = 60
+
+    # NVIDIA NIM / build.nvidia.com (OpenAI-compatible)
+    NVIDIA_API_KEY: Optional[str] = None
+    NVIDIA_API_URL: AnyHttpUrl = "https://integrate.api.nvidia.com"
+    NVIDIA_TIMEOUT: int = 60
+
+    # Cloudflare Workers AI (OpenAI-compatible gateway)
+    CLOUDFLARE_API_KEY: Optional[str] = None
+    CLOUDFLARE_API_URL: Optional[AnyHttpUrl] = None  # incluye el account id
+    CLOUDFLARE_TIMEOUT: int = 60
+
+    # Vercel AI Gateway (OpenAI-compatible)
+    VERCEL_API_KEY: Optional[str] = None
+    VERCEL_API_URL: AnyHttpUrl = "https://ai-gateway.vercel.sh"
+    VERCEL_TIMEOUT: int = 60
+
     # Custom endpoint
     CUSTOM_LLM_ENDPOINT: Optional[AnyHttpUrl] = None
     CUSTOM_LLM_API_KEY: Optional[str] = None
 
-    @field_validator("CUSTOM_LLM_ENDPOINT", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "REDIS_PASSWORD", mode="before")
+    @field_validator(
+        "CUSTOM_LLM_ENDPOINT", "CLOUDFLARE_API_URL",
+        "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "REDIS_PASSWORD",
+        mode="before",
+    )
     @classmethod
     def _empty_str_to_none(cls, v):
         if v == "":

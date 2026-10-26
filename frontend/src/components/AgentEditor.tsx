@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { LiveAgent } from '../hooks/useLiveOffice'
 import { AgentSprite } from './office/AgentSprite'
-import { ROSTER, PROVIDERS, PROVIDER_MODELS, FATIGUE_META, fatigueOf } from '../data/demo'
+import { ROSTER, FATIGUE_META, fatigueOf } from '../data/demo'
+import { useProviders, modelsForProvider, defaultModelFor } from '../hooks/useProviders'
 import { ensureAuth, getSkills, pingAgent, type AgentPatch, type PingResult } from '../api'
 
 interface Props {
@@ -52,6 +53,7 @@ export function AgentEditor({ agent, onClose, onSave, onLook, onPause, onResume,
 
   const fat = fatigueOf(agent.energy)
   const paused = agent.status === 'paused'
+  const { catalog: provCatalog } = useProviders()
 
   useEffect(() => {
     let off = false
@@ -95,11 +97,10 @@ export function AgentEditor({ agent, onClose, onSave, onLook, onPause, onResume,
     window.setTimeout(() => setSaved(false), 2000)
   }
 
-  const provModels = PROVIDER_MODELS[provider] ?? []
+  const provModels = modelsForProvider(provCatalog, provider)
   const pickProvider = (p: string) => {
     setProvider(p)
-    const models = PROVIDER_MODELS[p] ?? []
-    setModel(models[0] ?? '')
+    setModel(defaultModelFor(provCatalog, p))
     setCustomModel(false)
   }
 
@@ -129,8 +130,8 @@ export function AgentEditor({ agent, onClose, onSave, onLook, onPause, onResume,
           <div style={{ fontFamily: GB, fontSize: 9, color: '#78716C', marginBottom: 6 }}>MOTOR LINGÜÍSTICO</div>
           <label style={{ fontSize: 11, color: '#A8A29E' }}>Proveedor (primero)</label>
           <select value={provider} onChange={(e) => pickProvider(e.target.value)} style={inputStyle}>
-            {PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} — {p.models}</option>
+            {provCatalog.map((p) => (
+              <option key={p.id} value={p.id}>{p.enabled ? '✓' : '○'} {p.label}{p.note ? ` — ${p.note}` : ''}</option>
             ))}
           </select>
           <label style={{ fontSize: 11, color: '#A8A29E', marginTop: 6, display: 'block' }}>Modelo (del proveedor)</label>

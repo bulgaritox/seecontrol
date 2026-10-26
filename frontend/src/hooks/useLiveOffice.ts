@@ -71,6 +71,16 @@ export interface LiveDoc {
   taskId?: string
 }
 
+// Mensaje de una conversación directa con un agente (modo "GPT/chatbot")
+export interface AgentChatMsg {
+  id: number
+  role: 'user' | 'agent'
+  text: string
+  tokens?: number
+  time: string
+  error?: boolean
+}
+
 export type Mode = 'demo' | 'prod'
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a)
@@ -144,6 +154,17 @@ export function useLiveOffice() {
   const [backendOk, setBackendOk] = useState(false)
   const [wsLive, setWsLive] = useState(false)
   const [version, setVersion] = useState('1.0.0')
+  // Agente seleccionado (el que estoy usando ahora mismo) + conversaciones directas
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(() => localStorage.getItem('sc_selected') || null)
+  const [agentChats, setAgentChats] = useState<Record<string, AgentChatMsg[]>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sc_agentchats') ?? '{}') as Record<string, AgentChatMsg[]>
+    } catch {
+      return {}
+    }
+  })
+  const [chattingWith, setChattingWith] = useState<string | null>(null) // agente con ventana de chat abierta
+  const [agentThinking, setAgentThinking] = useState<string | null>(null) // agente procesando un mensaje directo
   const [docs, setDocs] = useState<LiveDoc[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('sc_docs') ?? '[]') as LiveDoc[]
@@ -775,10 +796,133 @@ export function useLiveOffice() {
     [docs, agents, pushActivity, setMood],
   )
 
+  // --- Agente seleccionado (indicador "sombreado" global) ---
+  const selectAgent = useCallback((id: string | null) => {
+    setSelectedAgentId(id)
+    try {
+      if (id) localStorage.setItem('sc_selected', id)
+      else localStorage.removeItem('sc_selected')
+    } catch {
+      /* noop */
+    }
+  }, [])
+
+  // --- Ventana de chat tipo chatbot por agente ---
+  const openAgentChat = useCallback((id: string) => {
+    setChattingWith(id)
+    selectAgent(id)
+  }, [selectAgent])
+
+  const closeAgentChat = useCallback(() => setChattingWith(null), [])
+
+  // Persistir conversaciones directas
+  useEffect(() => {
+    try {
+      localStorage.setItem('sc_agentchats', JSON.stringify(agentChats))
+    } catch {
+      /* noop */
+    }
+  }, [agentChats])
+
+  // Enviar un mensaje directo a un agente (usa pingAgent → su proveedor real)
+  const sendAgentMessage = useCallback(
+    async (agentId: string, text: string) => {
+      const clean = text.trim()
+      if (!clean) return
+      const ag = agents.find((a) => a.id === agentId)
+      if (!ag) return
+      const stamp = now()
+      setAgentChats((prev) => ({
+        ...prev,
+        [agentId]: [...(prev[agentId] ?? []), { id: seq++, role: 'user', text: clean, time: stamp }],
+      }))
+      if (!ag.backendId) {
+        setAgentChats((prev) => ({
+          ...prev,
+          [agentId]: [
+            ...(prev[agentId] ?? []),
+            { id: seq++, role: 'agent', text: `${ag.name} es un agente local sin backend: no puedo ejecutar un modelo real. Créalo en el backend para chatear de verdad.`, time: now(), error: true },
+          ],
+        }))
+        return
+      }
+      setAgentThinking(agentId)
+      // el agente "trabaja" visualmente mientras responde en el chat directo
+      setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, status: 'working', log: 'respondiendo chat…' } : a)))
+      // breve contexto: últimos turnos de la conversación
+      const history = (agentChats[agentId] ?? []).slice(-6).map((m) => `${m.role === 'user' ? 'Usuario' : ag.name}: ${m.text}`).join('\n')
+      const prompt = history ? `${history}\nUsuario: ${clean}` : clean
+      try {
+        const res = await pingAgent(ag.backendId, prompt, 1500)
+        if (res.ok && res.reply) {
+          setAgentChats((prev) => ({
+            ...prev,
+            [agentId]: [...(prev[agentId] ?? []), { id: seq++, role: 'agent', text: res.reply!, tokens: res.tokens, time: now() }],
+          }))
+          pushActivity(ag.name, `${ag.name} respondió en chat directo 💬 (${res.tokens ?? '?'} tok)`, 'info')
+          // "Hilo" visible en oficina/estudio: una hoja por agente que acumula la conversación
+          const threadId = `thread-${agentId}`
+          const entry = `▶ ${clean}\n${res.reply}`
+          setDocs((prev) => {
+            const existing = prev.find((d) => d.id === threadId)
+            if (existing) {
+              return prev.map((d) => (d.id === threadId ? { ...d, full: `${d.full}\n\n${entry}`, question: clean, fresh: true, time: now() } : d))
+            }
+            const doc: LiveDoc = {
+              id: threadId,
+              title: `Hilo · ${ag.name}`,
+              question: clean,
+              full: entry,
+              agentName: ag.name,
+              agentId: ag.id,
+              fresh: true,
+              time: now(),
+            }
+            return [doc, ...prev].slice(0, 12)
+          })
+          setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, status: 'completed', log: 'respondió ✓' } : a)))
+        } else {
+          setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, status: 'idle', log: pick(CHATTER) } : a)))
+          const head = res.mood?.headline ?? `${ag.name} no pudo responder ahora mismo.`
+          setAgentChats((prev) => ({
+            ...prev,
+            [agentId]: [...(prev[agentId] ?? []), { id: seq++, role: 'agent', text: head, time: now(), error: true }],
+          }))
+          if (res.mood) setMood(agentId, res.mood)
+        }
+      } catch {
+        setAgentChats((prev) => ({
+          ...prev,
+          [agentId]: [...(prev[agentId] ?? []), { id: seq++, role: 'agent', text: `${ag.name}: error de red al contactar al backend.`, time: now(), error: true }],
+        }))
+      } finally {
+        setAgentThinking(null)
+      }
+    },
+    [agents, agentChats, pushActivity, setMood],
+  )
+
+  const clearAgentChat = useCallback((agentId: string) => {
+    setAgentChats((prev) => {
+      const next = { ...prev }
+      delete next[agentId]
+      return next
+    })
+  }, [])
+
+  // Historial de tareas que el orquestador asignó a un agente (por nombre)
+  const tasksForAgent = useCallback(
+    (agentName?: string) => (agentName ? tasks.filter((t) => t.agentName === agentName) : []),
+    [tasks],
+  )
+
   return {
     agents, tasks, docs, activity, chat, stats, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
     saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
     openDoc, followUpDoc, fatigueOf,
+    // nuevas capacidades
+    selectedAgentId, selectAgent, chattingWith, openAgentChat, closeAgentChat,
+    agentChats, agentThinking, sendAgentMessage, clearAgentChat, tasksForAgent,
   }
 }
