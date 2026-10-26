@@ -56,12 +56,16 @@ class LLMService:
         logger.info(f"LLM service initialized with providers: {[p.value for p in enabled_providers]}")
     
     def _get_headers(self, provider: ProviderType) -> Dict[str, str]:
-        """Get headers for a provider"""
-        config = llm_config.providers.get(provider)
+        """Get headers for a provider (usa la key EFECTIVA: override UI o .env)."""
+        from ..config.llm import effective_api_key
         headers = {
             "Content-Type": "application/json",
         }
-        
+
+        class _K:  # pequeño shim para mantener el bloque de abajo intacto
+            api_key = effective_api_key(provider.value)
+        config = _K()
+
         if config and config.api_key:
             if provider == ProviderType.ANTHROPIC:
                 headers["x-api-key"] = config.api_key
@@ -458,6 +462,86 @@ class LLMService:
         except Exception as e:
             raise LLMError(f"Custom endpoint error: {e}", ProviderType.CUSTOM)
     
+    # ============================================
+    # LLAMADA CON KEY EFECTIVA (override UI o .env) — soporta custom
+    # ============================================
+    # Formato del endpoint OpenAI-compatible por proveedor (path relativo a su base_url).
+    _CHAT_PATHS = {
+        "groq": "/v1/chat/completions",
+        "openai": "/v1/chat/completions",
+        "deepseek": "/chat/completions",
+        "mistral": "/v1/chat/completions",
+        "openrouter": "/v1/chat/completions",
+        "nvidia": "/v1/chat/completions",
+        "cloudflare": "/ai/v1/chat/completions",
+        "vercel": "/v1/chat/completions",
+        "custom": "/v1/chat/completions",
+    }
+
+    async def chat_effective(
+        self,
+        provider_id: str,
+        model: str,
+        messages: List[Dict[str, Any]],
+        max_tokens: int = 1024,
+        temperature: float = 0.6,
+    ) -> Tuple[str, int, str]:
+        """Ejecuta un chat usando la credencial EFECTIVA del proveedor
+        (override de la UI con prioridad, .env como respaldo). Soporta
+        proveedores conocidos OpenAI-compatible y proveedores custom.
+        Para anthropic/gemini (formato propio) delega en sus _call_*.
+        Devuelve (content, tokens, provider_id)."""
+        from ..config.llm import (
+            effective_api_key, effective_api_url, provider_timeout, is_custom_provider,
+        )
+
+        key = effective_api_key(provider_id)
+        if not key:
+            raise LLMError(f"{provider_id}: sin API key", provider_id)
+
+        # Formatos propios conocidos
+        if provider_id == "anthropic":
+            content, tokens = await self._call_anthropic("", model, messages, max_tokens=max_tokens, temperature=temperature)
+            return content, tokens, provider_id
+        if provider_id == "gemini":
+            content, tokens = await self._call_gemini("", model, messages, max_tokens=max_tokens, temperature=temperature)
+            return content, tokens, provider_id
+
+        # OpenAI-compatible (incluye custom): construimos cliente efímero con key/url efectivas
+        base = effective_api_url(provider_id)
+        path = self._CHAT_PATHS.get(provider_id, "/v1/chat/completions")
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+        if provider_id == "openrouter":
+            headers["HTTP-Referer"] = "https://seecontrol.local"
+            headers["X-Title"] = "SeeControl"
+        payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+        try:
+            async with httpx.AsyncClient(base_url=base, timeout=provider_timeout(provider_id), headers=headers) as c:
+                r = await c.post(path, json=payload)
+                r.raise_for_status()
+                data = r.json()
+            content = ""
+            if data.get("choices"):
+                content = data["choices"][0].get("message", {}).get("content", "") or ""
+            usage = data.get("usage", {}) or {}
+            tokens = usage.get("total_tokens") or ((usage.get("prompt_tokens", 0) or 0) + (usage.get("completion_tokens", 0) or 0))
+            if not content:
+                raise LLMError(f"{provider_id}: respuesta vacía", provider_id)
+            return content, tokens, provider_id
+        except httpx.HTTPStatusError as e:
+            body = ""
+            try:
+                body = e.response.text[:200]
+            except Exception:
+                pass
+            if e.response.status_code == 429:
+                raise LLMError(f"{provider_id}: rate limit / sin saldo", provider_id, retryable=True)
+            raise LLMError(f"{provider_id} error {e.response.status_code}: {body}", provider_id)
+        except LLMError:
+            raise
+        except Exception as e:
+            raise LLMError(f"{provider_id} error: {e}", provider_id)
+
     async def chat(
         self,
         messages: List[Dict[str, Any]],

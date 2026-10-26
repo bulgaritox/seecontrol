@@ -20,6 +20,7 @@ from ..models.workspace import Workspace
 from ..schemas.agent import AgentCreate, AgentUpdate, AgentResponse, AgentListResponse, AgentAssign
 from ..services.auth import auth_service
 from ..services.orchestration import orchestration_service
+from ..services.delegation import delegation_service
 from ..services.llm import llm_service, LLMError
 from ..services.moods import mood_for
 from ..config.llm import ProviderType, provider_catalog
@@ -632,9 +633,12 @@ async def get_agent_office_state(
 
 
 class AgentPing(BaseModel):
-    """Tiny test message for an agent (minimal tokens)"""
+    """Mensaje para un agente. Permite imponer provider/model desde la UI."""
     message: Optional[str] = "Responde solo: OK"
     max_tokens: Optional[int] = 15
+    # Override desde Studio: si vienen, se IMPONEN al provider/model del agente.
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 # ============================================
@@ -672,20 +676,19 @@ async def ping_agent(
         if not user or not user.is_admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     
-    provider_name = (agent.provider or "mistral").lower()
+    # Override de Studio (provider/model elegidos en la UI) tiene prioridad
+    # sobre lo configurado en el agente. Si no viene, usa el del agente.
+    provider_name = (payload.provider or agent.provider or "mistral").lower()
+    model = payload.model or agent.model or "ministral-3b-latest"
+    question = (payload.message or "Responde solo: OK").strip()[:8000]
+    # Tope: mínimo 16 (Vercel exige >=16). Subido a 8000 para no truncar código.
+    max_tokens = min(max(payload.max_tokens or 256, 16), 8000)
+
     try:
-        provider = ProviderType(provider_name)
-    except ValueError:
-        provider = ProviderType.MISTRAL
-    
-    model = agent.model or "ministral-3b-latest"
-    question = (payload.message or "Responde solo: OK").strip()[:4000]
-    # Tope: mínimo 16 (Vercel exige >=16), respuestas reales hasta 2048.
-    max_tokens = min(max(payload.max_tokens or 256, 16), 2048)
-    
-    try:
-        content, tokens, used = await llm_service.chat(
-            provider=provider,
+        # chat_effective usa la credencial activa de la UI (override) con .env de respaldo,
+        # y soporta proveedores custom.
+        content, tokens, used = await llm_service.chat_effective(
+            provider_id=provider_name,
             model=model,
             messages=[
                 {"role": "system", "content": f"Eres {agent.name}, {agent.role} del equipo SeeControl. Responde en español, claro y directo."},
@@ -706,7 +709,75 @@ async def ping_agent(
         return {
             "ok": False,
             "agent": agent.name,
-            "provider": provider.value,
+            "provider": provider_name,
             "model": model,
-            "mood": mood_for(e.message, provider.value, agent.name),
+            "mood": mood_for(e.message, provider_name, agent.name),
         }
+
+
+# ============================================
+# ORQUESTACIÓN: BOSS DELEGA GENERACIÓN DE CÓDIGO
+# ============================================
+
+class OrchestrateRequest(BaseModel):
+    """Petición para que el boss descomponga y delegue generación de código.
+
+    provider/model (opcionales) son el override de Studio: si vienen, se
+    imponen al provider/model configurado en cada agente para esta ejecución.
+    """
+    request: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+@router.post("/orchestrate/code", response_model=dict)
+async def orchestrate_code(
+    payload: OrchestrateRequest,
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """El orquestador (boss) descompone la petición y delega:
+    boss=HTML, pixel=CSS, max=JS, y luego ensambla el entregable final.
+
+    Devuelve el código final completo + los tramos por agente (con el modelo
+    que usó cada uno) + los ids de las subtareas creadas (para el Kanban).
+    """
+    auth = auth_service.verify_token(token)
+    if not auth:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    user_id = auth.get("sub")
+
+    # Workspace por defecto del usuario
+    result = await db.execute(
+        select(Workspace).where(Workspace.user_id == user_id).limit(1)
+    )
+    workspace = result.scalar_one_or_none()
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No hay workspace para este usuario",
+        )
+
+    req = (payload.request or "").strip()
+    if not req:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="request vacío")
+
+    try:
+        result = await delegation_service.generate_code(
+            request=req,
+            workspace_id=str(workspace.id),
+            user_id=user_id,
+            override_provider=payload.provider,
+            override_model=payload.model,
+        )
+        return result
+    except LLMError as e:
+        return {
+            "ok": False,
+            "error": e.message,
+            "provider": e.provider,
+        }
+    except Exception as e:  # pragma: no cover - defensa
+        logger.exception("Error en orchestrate_code")
+        raise HTTPException(status_code=500, detail=f"Error de orquestación: {e}")

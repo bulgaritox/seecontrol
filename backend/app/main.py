@@ -17,12 +17,13 @@ from datetime import datetime
 from .config.settings import settings
 from .config.database import init_db, close_db
 from .config.websocket import websocket_manager
-from .api import users, agents, skills, tasks, missions, workspace, webhooks, office
+from .api import users, agents, skills, tasks, missions, workspace, webhooks, office, credentials
 from .services.auth import auth_service
 from .services.llm import llm_service
 from .services.orchestration import orchestration_service
 from .services.token_manager import token_manager
 from .services.seed import seed_initial_data
+from .services.credentials import init_credentials
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +50,10 @@ async def lifespan_manager(app: FastAPI) -> AsyncGenerator[None, None]:
     # Seed inicial: usuario admin + workspace + agentes del ROSTER (idempotente)
     await seed_initial_data()
     logger.info("Initial seed ready")
+
+    # Credenciales: siembra keys del .env como primera capa y carga overrides activos
+    await init_credentials()
+    logger.info("Provider credentials ready")
     
     # Initialize LLM service
     await llm_service.initialize()
@@ -139,6 +144,9 @@ app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 
 # Office (Real-time state)
 app.include_router(office.router, prefix="/api/office", tags=["office"])
+
+# Credentials (gestión de API keys por proveedor desde la UI)
+app.include_router(credentials.router, prefix="/api/credentials", tags=["credentials"])
 
 
 # ============================================

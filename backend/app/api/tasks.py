@@ -112,6 +112,8 @@ async def list_tasks(
                 status=t.status,
                 progress=t.progress,
                 agent_id=t.agent_id,
+                provider=t.provider,
+                model=t.model,
                 dependencies=t.dependencies,
                 result=t.result,
                 result_data=t.result_data,
@@ -188,6 +190,8 @@ async def get_task(
         status=task.status,
         progress=task.progress,
         agent_id=task.agent_id,
+        provider=task.provider,
+        model=task.model,
         dependencies=task.dependencies,
         result=task.result,
         result_data=task.result_data,
@@ -264,6 +268,8 @@ async def create_task(
         status=TaskStatus.PENDING,
         progress=0.0,
         agent_id=task_data.agent_id,
+        provider=task_data.provider,
+        model=task_data.model,
         dependencies=task_data.dependencies or [],
         user_id=user_id,
         workspace_id=str(workspace.id),
@@ -312,6 +318,8 @@ async def create_task(
         status=task.status,
         progress=task.progress,
         agent_id=task.agent_id,
+        provider=task.provider,
+        model=task.model,
         dependencies=task.dependencies,
         result=task.result,
         result_data=task.result_data,
@@ -388,6 +396,10 @@ async def update_task(
         task.progress = task_data.progress
     if task_data.agent_id is not None:
         task.agent_id = task_data.agent_id
+    if task_data.provider is not None:
+        task.provider = task_data.provider
+    if task_data.model is not None:
+        task.model = task_data.model
     if task_data.dependencies is not None:
         task.dependencies = task_data.dependencies
     if task_data.result is not None:
@@ -469,6 +481,8 @@ async def update_task(
         status=task.status,
         progress=task.progress,
         agent_id=task.agent_id,
+        provider=task.provider,
+        model=task.model,
         dependencies=task.dependencies,
         result=task.result,
         result_data=task.result_data,

@@ -197,24 +197,145 @@ llm_config = LLMProviderConfig(
 )
 
 
+# ============================================
+# CAPA DE OVERRIDES EN RUNTIME (gestionada desde la UI)
+# ============================================
+# La key/url/modelos definidos por el usuario tienen PRIORIDAD sobre el .env.
+# El .env queda como respaldo. Los proveedores "custom" se agregan aquí también.
+#
+# Estructura por provider_id:
+#   { "api_key": str, "api_url": str|None, "models": [str]|None,
+#     "label": str|None, "is_custom": bool, "timeout": int }
+_runtime: Dict[str, Dict[str, Any]] = {}
+
+# URLs base por defecto de los proveedores conocidos (para overrides de solo-key).
+_DEFAULT_URLS: Dict[str, str] = {
+    "anthropic": "https://api.anthropic.com",
+    "openai": "https://api.openai.com",
+    "deepseek": "https://api.deepseek.com",
+    "mistral": "https://api.mistral.ai",
+    "gemini": "https://generativelanguage.googleapis.com",
+    "groq": "https://api.groq.com/openai",
+    "openrouter": "https://openrouter.ai/api",
+    "nvidia": "https://integrate.api.nvidia.com",
+    "cloudflare": "https://api.cloudflare.com",
+    "vercel": "https://ai-gateway.vercel.sh",
+}
+
+
+def set_runtime_overrides(overrides: Dict[str, Dict[str, Any]]) -> None:
+    """Reemplaza por completo la capa de overrides (llamado tras leer la DB)."""
+    global _runtime
+    _runtime = overrides or {}
+
+
+def effective_api_key(provider_id: str) -> Optional[str]:
+    """Key efectiva: override de UI si existe, si no la del .env."""
+    ov = _runtime.get(provider_id)
+    if ov and ov.get("api_key"):
+        return ov["api_key"]
+    try:
+        cfg = llm_config.providers.get(ProviderType(provider_id))
+        return cfg.api_key if cfg else None
+    except ValueError:
+        return None
+
+
+def effective_api_url(provider_id: str) -> str:
+    """URL base efectiva: override de UI, si no .env, si no el default conocido."""
+    ov = _runtime.get(provider_id)
+    if ov and ov.get("api_url"):
+        return str(ov["api_url"])
+    try:
+        cfg = llm_config.providers.get(ProviderType(provider_id))
+        if cfg:
+            return str(cfg.api_url)
+    except ValueError:
+        pass
+    return _DEFAULT_URLS.get(provider_id, "http://localhost:8000")
+
+
+def effective_models(provider_id: str) -> List[str]:
+    """Modelos efectivos: override de UI si tiene, si no los del catálogo."""
+    ov = _runtime.get(provider_id)
+    if ov and ov.get("models"):
+        return list(ov["models"])
+    try:
+        cfg = llm_config.providers.get(ProviderType(provider_id))
+        return list(cfg.models) if cfg else []
+    except ValueError:
+        return []
+
+
+def is_custom_provider(provider_id: str) -> bool:
+    ov = _runtime.get(provider_id)
+    return bool(ov and ov.get("is_custom"))
+
+
+def provider_timeout(provider_id: str) -> int:
+    ov = _runtime.get(provider_id)
+    if ov and ov.get("timeout"):
+        return int(ov["timeout"])
+    try:
+        cfg = llm_config.providers.get(ProviderType(provider_id))
+        return cfg.timeout if cfg else 60
+    except ValueError:
+        return 60
+
+
+def provider_enabled(provider_id: str) -> bool:
+    """Habilitado si hay key efectiva real (override o .env)."""
+    return has_key(effective_api_key(provider_id))
+
+
+def all_provider_ids() -> List[str]:
+    """IDs conocidos (enum) + custom agregados por la UI."""
+    ids = [p.value for p in ProviderType]
+    for pid, ov in _runtime.items():
+        if ov.get("is_custom") and pid not in ids:
+            ids.append(pid)
+    return ids
+
+
 def provider_catalog() -> list:
     """Catálogo de proveedores y sus modelos permitidos para la UI.
 
-    Devuelve solo lo que la plataforma integra de verdad (no listas genéricas),
-    indicando si cada proveedor está habilitado (tiene API key) y una nota.
+    Combina los proveedores del enum + los custom agregados desde la UI.
+    Refleja la key efectiva (override de UI o .env) para el flag enabled.
     """
     out = []
+    seen = set()
+    # proveedores conocidos, en el orden de failover
     for p in llm_config.failover_order:
         cfg = llm_config.providers.get(p)
         if not cfg:
             continue
+        pid = p.value
+        seen.add(pid)
         out.append({
-            "id": p.value,
-            "label": cfg.label or p.value.capitalize(),
-            "enabled": bool(cfg.enabled),
-            "models": list(cfg.models),
+            "id": pid,
+            "label": (_runtime.get(pid, {}).get("label") or cfg.label or pid.capitalize()),
+            "enabled": provider_enabled(pid),
+            "models": effective_models(pid),
             "note": cfg.note,
-            "default_model": cfg.models[0] if cfg.models else None,
+            "default_model": (effective_models(pid)[0] if effective_models(pid) else None),
+            "api_url": effective_api_url(pid),
+            "is_custom": False,
+        })
+    # proveedores custom agregados desde la UI
+    for pid, ov in _runtime.items():
+        if pid in seen or not ov.get("is_custom"):
+            continue
+        models = list(ov.get("models") or [])
+        out.append({
+            "id": pid,
+            "label": ov.get("label") or pid,
+            "enabled": provider_enabled(pid),
+            "models": models,
+            "note": "Proveedor custom",
+            "default_model": models[0] if models else None,
+            "api_url": effective_api_url(pid),
+            "is_custom": True,
         })
     return out
 

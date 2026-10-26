@@ -80,6 +80,43 @@ Tocar **en este orden**:
 > Nota: un proveedor solo queda "enabled" si su API key es **real** (no vacía ni placeholder;
 > ver `has_key()` en `config/llm.py`). Cambiar `.env` requiere reiniciar uvicorn.
 
+### 3.1-tris Credenciales gestionables desde la UI (API keys por proveedor)
+Las keys ya **no requieren editar el `.env`** para el día a día: se gestionan desde
+`/proveedores`. El `.env` es la **primera siembra** y queda de respaldo.
+
+- **Modelo:** `models/provider_credential.py` (`ProviderCredential`): múltiples por proveedor,
+  con `label`, `api_key`, `is_active`, y para custom `label_display`/`api_url`/`models`.
+  Registrado en `models/__init__.py` (su tabla se crea con `create_all`).
+- **Servicio:** `services/credentials.py`:
+  - `seed_credentials_from_env()` siembra una credencial por cada key real del `.env`.
+  - `load_overrides_from_db()` carga las credenciales activas a la **capa de overrides**
+    de `config/llm.py` (`set_runtime_overrides`), que tiene prioridad sobre el `.env`.
+  - `refresh_overrides()` se llama tras cualquier cambio de credencial.
+  - `init_credentials()` corre en el lifespan (después del seed de agentes).
+- **Capa de overrides** (`config/llm.py`): `effective_api_key/url/models`, `provider_enabled`,
+  `is_custom_provider`, `all_provider_ids`. El `LLMService.chat_effective(provider_id, ...)`
+  usa estas funciones, construye un cliente httpx efímero con la key/url efectivas y
+  soporta proveedores custom. `ping_agent` llama a `chat_effective`.
+- **Router:** `api/credentials.py` montado en `/api/credentials`:
+  - `GET /` lista (key enmascarada) · `POST /` crea · `PUT /{id}` edita (incl. modelos) ·
+    `POST /{id}/activate` activa · `DELETE /{id}` borra.
+  - `POST /test` prueba una key/modelo SIN guardar (usado por Playground y alta custom).
+  - `GET /usage/{provider_id}` consumo/créditos cuando el proveedor lo expone (OpenRouter sí).
+- **Frontend:**
+  - `api.ts`: `getCredentials/createCredential/updateCredential/activateCredential/
+    deleteCredential/testCredential/getProviderUsage`.
+  - `components/ProvidersPanel.tsx`: cada card gestiona varias keys (nombre, activa,
+    agregar/borrar), muestra uso, y permite **editar los modelos** (chips con × y "+ agregar").
+  - `components/ProvidersSidebar.tsx`: en la ruta `/proveedores`, el sidebar izquierdo
+    cambia Studio/Chat por **Playground** (prueba temporal, sin guardar) y **Proveedor**
+    (alta de custom: nombre + api_url + key, se valida con `/test` y solo guarda si responde).
+  - `App.tsx` renderiza `ProvidersSidebar` en `/proveedores` (si no, `StudioPanel`).
+
+> Checklist al tocar credenciales/proveedores: modelo → `__init__` → servicio (seed/overrides)
+> → router → `api.ts` → panel. Reiniciar uvicorn si cambias el servicio o el modelo.
+> Al agregar/editar keys o modelos desde la UI **no** hace falta reiniciar: `refresh_overrides()`
+> recarga la capa en caliente.
+
 ### 3.1-bis Catálogo de modelos (fuente de verdad para la UI)
 - **Backend:** `config/llm.py` → `provider_catalog()` arma la lista `{id, label, enabled, models,
   note, default_model}` por proveedor. Se expone en `api/agents.py` → `GET /api/agents/providers`.

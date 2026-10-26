@@ -24,6 +24,8 @@ class TaskCreate(TaskBase):
     priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
     
     agent_id: Optional[str] = Field(default=None, max_length=100)
+    provider: Optional[str] = Field(default=None, max_length=60)
+    model: Optional[str] = Field(default=None, max_length=120)
     
     dependencies: List[str] = Field(default=[])
     
@@ -45,6 +47,8 @@ class TaskUpdate(BaseModel):
     progress: Optional[float] = Field(default=None, ge=0, le=100)
     
     agent_id: Optional[str] = Field(default=None, max_length=100)
+    provider: Optional[str] = Field(default=None, max_length=60)
+    model: Optional[str] = Field(default=None, max_length=120)
     
     dependencies: Optional[List[str]] = None
     
@@ -75,6 +79,8 @@ class TaskResponse(TaskBase):
     progress: float
     
     agent_id: Optional[str]
+    provider: Optional[str] = None
+    model: Optional[str] = None
     
     dependencies: List[str]
     

@@ -41,6 +41,14 @@ export function KanbanBoard({ tasks, agents, onApprove, onTaskControl, onOpenTas
                         ■ <b style={{ color: FATIGUE_META[fatigueOf(ag.energy)].color }}>{ag.name}</b> <span style={{ color: '#78716C' }}>({ag.provider})</span>
                       </div>
                     )}
+                    {t.model && (
+                      <div
+                        title={`Modelo usado para esta tarea: ${t.provider ? `${t.provider}/` : ''}${t.model}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#C4B5FD', background: '#2E1065', border: '1px solid #4C1D95', borderRadius: 6, padding: '2px 7px', marginBottom: 6, maxWidth: '100%', overflow: 'hidden' }}
+                      >
+                        🧠 <b style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.provider ? `${t.provider}/` : ''}{t.model}</b>
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, color: '#A8A29E', fontStyle: 'italic', marginBottom: 6 }}>
                       ■ Status: “{t.status === 'in_progress' ? 'Compilando…' : t.status === 'completed' ? 'Entregado ✓' : t.status === 'blocked' ? 'Bloqueado 🚩' : 'En cola'}”
                     </div>

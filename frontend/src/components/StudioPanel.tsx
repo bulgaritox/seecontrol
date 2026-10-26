@@ -6,7 +6,7 @@ import { useProviders, modelsForProvider, defaultModelFor } from '../hooks/usePr
 interface Props {
   agents: LiveAgent[]
   chat: ChatMsg[]
-  onSend: (text: string) => void
+  onSend: (text: string, override?: { provider: string; model: string }) => void
   onEdit: (id: string) => void
   onPause: (id: string) => void
   onResume: (id: string) => void
@@ -182,7 +182,7 @@ export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume, o
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                onSend(input)
+                onSend(input, { provider: shownProvider, model: shownModel })
                 setInput('')
               }
             }}
@@ -191,7 +191,7 @@ export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume, o
           />
           <button
             onClick={() => {
-              onSend(input)
+              onSend(input, { provider: shownProvider, model: shownModel })
               setInput('')
             }}
             style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 8, padding: '0 14px', cursor: 'pointer', fontWeight: 'bold' }}
@@ -221,6 +221,10 @@ export function StudioPanel({ agents, chat, onSend, onEdit, onPause, onResume, o
             ))}
           </select>
           {enabled.length > 0 && <span title="Proveedores con API key en el backend">🔑</span>}
+        </div>
+        <div style={{ fontSize: 10, color: '#A8A29E', marginTop: 6, lineHeight: 1.4 }}>
+          ⚡ El modelo elegido aquí <b>se impone</b> al configurado en Boss para esta misión.
+          Boss delega: estructura HTML a Boss, CSS a Pixel, JS a Max.
         </div>
       </div>
     </div>

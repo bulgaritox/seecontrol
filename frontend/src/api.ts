@@ -28,6 +28,8 @@ export interface BackendTask {
   status: string
   progress: number
   agent_id?: string | null
+  provider?: string | null
+  model?: string | null
   result?: string | null
 }
 
@@ -130,8 +132,14 @@ export async function getMissions(): Promise<BackendMission[]> {
   }
 }
 
-export async function createTask(title: string, description: string, priority = 'medium'): Promise<{ id: string }> {
-  return req<{ id: string }>('POST', '/api/tasks/', { title, description, priority })
+export async function createTask(
+  title: string,
+  description: string,
+  priority = 'medium',
+  provider?: string,
+  model?: string,
+): Promise<{ id: string }> {
+  return req<{ id: string }>('POST', '/api/tasks/', { title, description, priority, provider, model })
 }
 
 export async function getSkills(): Promise<BackendSkill[]> {
@@ -178,8 +186,56 @@ export interface PingResult {
   mood?: AgentMood
 }
 
-export async function pingAgent(id: string, message?: string, maxTokens?: number): Promise<PingResult> {
-  return req<PingResult>('POST', `/api/agents/${id}/ping`, { message: message ?? 'Responde solo: OK', max_tokens: maxTokens ?? 15 })
+export async function pingAgent(
+  id: string,
+  message?: string,
+  maxTokens?: number,
+  override?: { provider?: string; model?: string },
+): Promise<PingResult> {
+  return req<PingResult>('POST', `/api/agents/${id}/ping`, {
+    message: message ?? 'Responde solo: OK',
+    max_tokens: maxTokens ?? 15,
+    provider: override?.provider,
+    model: override?.model,
+  })
+}
+
+// ============================================
+// ORQUESTACIÓN: boss delega la generación de código a pixel/max
+// ============================================
+
+export interface OrchestrateStep {
+  agent: string
+  role: string
+  provider: string
+  model: string
+  tokens: number
+}
+
+export interface OrchestrateResult {
+  ok: boolean
+  final?: string
+  html?: string
+  css?: string
+  js?: string
+  steps?: OrchestrateStep[]
+  subtask_ids?: string[]
+  total_tokens?: number
+  override?: boolean
+  provider?: string
+  model?: string
+  error?: string
+}
+
+export async function orchestrateCode(
+  request: string,
+  override?: { provider?: string; model?: string },
+): Promise<OrchestrateResult> {
+  return req<OrchestrateResult>('POST', '/api/agents/orchestrate/code', {
+    request,
+    provider: override?.provider,
+    model: override?.model,
+  })
 }
 
 export interface ProviderCatalogEntry {
@@ -189,6 +245,8 @@ export interface ProviderCatalogEntry {
   models: string[]
   note: string
   default_model: string | null
+  api_url?: string
+  is_custom?: boolean
 }
 
 export async function getProviders(): Promise<ProviderCatalogEntry[]> {
@@ -197,6 +255,100 @@ export async function getProviders(): Promise<ProviderCatalogEntry[]> {
     return data.providers ?? []
   } catch {
     return []
+  }
+}
+
+// ============================================
+// CREDENCIALES DE PROVEEDORES (gestión desde la UI)
+// ============================================
+
+export interface Credential {
+  id: string
+  provider_id: string
+  label: string
+  api_key_masked: string
+  is_active: boolean
+  is_custom: boolean
+  label_display: string | null
+  api_url: string | null
+  models: string[]
+}
+
+export async function getCredentials(): Promise<Credential[]> {
+  try {
+    const d = await req<{ credentials: Credential[] }>('GET', '/api/credentials/')
+    return d.credentials ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function createCredential(body: {
+  provider_id: string
+  label: string
+  api_key: string
+  is_custom?: boolean
+  label_display?: string
+  api_url?: string
+  models?: string[]
+  make_active?: boolean
+}): Promise<Credential> {
+  return req<Credential>('POST', '/api/credentials/', body)
+}
+
+export async function updateCredential(id: string, body: {
+  label?: string
+  api_key?: string
+  api_url?: string
+  models?: string[]
+  label_display?: string
+}): Promise<Credential> {
+  return req<Credential>('PUT', `/api/credentials/${id}`, body)
+}
+
+export async function activateCredential(id: string): Promise<void> {
+  await req('POST', `/api/credentials/${id}/activate`, {})
+}
+
+export async function deleteCredential(id: string): Promise<void> {
+  await req('DELETE', `/api/credentials/${id}`)
+}
+
+export interface TestResult {
+  ok: boolean
+  reply?: string
+  tokens?: number
+  provider?: string
+  model?: string
+  error?: string
+}
+
+export async function testCredential(body: {
+  provider_id: string
+  api_key?: string
+  api_url?: string
+  model: string
+  message?: string
+  is_custom?: boolean
+}): Promise<TestResult> {
+  return req<TestResult>('POST', '/api/credentials/test', body)
+}
+
+export interface UsageInfo {
+  available: boolean
+  note?: string
+  provider?: string
+  usage?: number
+  limit?: number
+  is_free_tier?: boolean
+  label?: string
+}
+
+export async function getProviderUsage(providerId: string): Promise<UsageInfo> {
+  try {
+    return await req<UsageInfo>('GET', `/api/credentials/usage/${providerId}`)
+  } catch {
+    return { available: false, note: 'No disponible' }
   }
 }
 
@@ -244,6 +396,8 @@ export interface TaskPatch {
   status?: string
   progress?: number
   agent_id?: string | null
+  provider?: string
+  model?: string
   result?: string
   tokens_used?: number
 }

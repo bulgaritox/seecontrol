@@ -47,6 +47,10 @@ class Task(Base, BaseModel):
     # Agent assignment
     agent_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
+    # Which provider/model actually executed this task (for traceability in the UI)
+    provider: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    
     # Dependencies
     dependencies: Mapped[List[str]] = mapped_column(JSON, default=[], nullable=False)
     
@@ -111,5 +115,7 @@ class Task(Base, BaseModel):
             "status": self.status.value,
             "progress": int(self.progress),
             "agent_id": str(self.agent_id) if self.agent_id else None,
+            "provider": self.provider,
+            "model": self.model,
             "timestamp": datetime.utcnow().isoformat(),
         }

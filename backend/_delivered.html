@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeeControl - Gestor Kanban</title>
+    <meta name="description" content="Herramienta Kanban para gestionar tareas con localStorage">
+    <link rel="stylesheet" href="styles.css" media="all">
+<style>
+/* Estilos generales */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f6f8;
+    color: #333;
+}
+
+/* Encabezado */
+.kanban-header {
+    background-color: #007bff;
+    color: white;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.kanban-header h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.kanban-actions {
+    margin-top: 10px;
+}
+
+.btn-create-task {
+    background-color: #0056b3;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    font-size: 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.btn-create-task:hover {
+    background-color: #004080;
+}
+
+/* Contenedor principal */
+.kanban-container {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+/* Filtros */
+.kanban-filters {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.filter-group label {
+    font-size: 0.9rem;
+}
+
+.filter-checkbox {
+    transform: scale(1.2);
+}
+
+/* Columnas */
+.kanban-columns {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    overflow-x: auto;
+}
+
+.kanban-column {
+    flex: 1;
+    min-width: 300px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    padding: 15px;
+}
+
+.column-title {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.column-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Tarjetas de tareas */
+.task-card {
+    background-color: #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    position: relative;
+    transition: transform 0.2s ease;
+}
+
+.task-card:hover {
+    transform: translateY(-2px);
+}
+
+.task-content {
+    margin-bottom: 10px;
+}
+
+.task-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.task-description {
+    margin: 5px 0 0;
+    font-size: 0.95rem;
+    color: #555;
+}
+
+.task-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-edit-task,
+.btn-move-task,
+.btn-delete-task {
+    background-color: transparent;
+    border: none;
+    color: #007bff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.btn-edit-task:hover,
+.btn-move-task:hover,
+.btn-delete-task:hover {
+    color: #0056b3;
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-dialog {
+    background-color: white;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.modal-header {
+    padding: 15px;
+    border-bottom: 1px solid #ddd;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    float: right;
+    color: #007bff;
+}
+
+.modal-body {
+    padding: 15px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid #ddd;
+    padding: 15px;
+}
+
+.btn-cancel,
+.btn-save {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+.btn-cancel {
+    background-color: #ccc;
+    color: #333;
+    margin-right: 10px;
+}
+
+.btn-save {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-cancel:hover {
+    background-color: #bbb;
+}
+
+.btn-save:hover {
+    background-color: #0056b3;
+}
+
+/* Notificación */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: #4CAF50;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    display: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    z-index: 1000;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .kanban-columns {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .kanban-column {
+        width: 100%;
+    }
+
+    .modal-dialog {
+        max-width: 90%;
+    }
+}
+</style>
+</head>
+<body>
+    <!-- Encabezado principal -->
+    <header class="kanban-header" id="kanban-header">
+        <h1 id="kanban-title">Gestor Kanban</h1>
+        <div class="kanban-actions">
+            <button id="new-task-btn" class="btn-create-task">Nueva tarea</button>
+        </div>
+    </header>
+
+    <!-- Contenedor principal del Kanban -->
+    <main class="kanban-container" id="kanban-container">
+        <!-- Barra de filtros (opcional) -->
+        <div class="kanban-filters" id="kanban-filters">
+            <div class="filter-group">
+                <label for="filter-all">Todo</label>
+                <input type="checkbox" id="filter-all" class="filter-checkbox">
+            </div>
+            <div class="filter-group">
+                <label for="filter-doing">Doing</label>
+                <input type="checkbox" id="filter-doing" class="filter-checkbox">
+            </div>
+            <div class="filter-group">
+                <label for="filter-done">Done</label>
+                <input type="checkbox" id="filter-done" class="filter-checkbox">
+            </div>
+        </div>
+
+        <!-- Columnas del Kanban -->
+        <div class="kanban-columns" id="kanban-columns">
+            <!-- Columna Todo -->
+            <div class="kanban-column" id="todo-column">
+                <h2 class="column-title">Todo</h2>
+                <div class="column-tasks" id="todo-tasks">
+                    <!-- Tarjetas de tareas (se generarán dinámicamente) -->
+                    <div class="task-card placeholder-task" data-column="todo">
+                        <div class="task-content">
+                            <h3 class="task-title">Título de la tarea</h3>
+                            <p class="task-description">Descripción de la tarea</p>
+                        </div>
+                        <div class="task-actions">
+                            <button class="btn-edit-task">Editar</button>
+                            <button class="btn-move-task">Mover</button>
+                            <button class="btn-delete-task">Borrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Doing -->
+            <div class="kanban-column" id="doing-column">
+                <h2 class="column-title">Doing</h2>
+                <div class="column-tasks" id="doing-tasks">
+                    <!-- Tarjetas de tareas (se generarán dinámicamente) -->
+                    <div class="task-card placeholder-task" data-column="doing">
+                        <div class="task-content">
+                            <h3 class="task-title">Título de la tarea</h3>
+                            <p class="task-description">Descripción de la tarea</p>
+                        </div>
+                        <div class="task-actions">
+                            <button class="btn-edit-task">Editar</button>
+                            <button class="btn-move-task">Mover</button>
+                            <button class="btn-delete-task">Borrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Done -->
+            <div class="kanban-column" id="done-column">
+                <h2 class="column-title">Done</h2>
+                <div class="column-tasks" id="done-tasks">
+                    <!-- Tarjetas de tareas (se generarán dinámicamente) -->
+                    <div class="task-card placeholder-task" data-column="done">
+                        <div class="task-content">
+                            <h3 class="task-title">Título de la tarea</h3>
+                            <p class="task-description">Descripción de la tarea</p>
+                        </div>
+                        <div class="task-actions">
+                            <button class="btn-edit-task">Editar</button>
+                            <button class="btn-move-task">Mover</button>
+                            <button class="btn-delete-task">Borrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal para crear/editar tareas -->
+    <div class="modal" id="task-modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">Nueva tarea</h2>
+                    <button type="button" class="close-btn" aria-label="Cerrar">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="task-form">
+                        <div class="form-group">
+                            <label for="task-title">Título:</label>
+                            <input type="text" id="task-title" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-description">Descripción:</label>
+                            <textarea id="task-description" class="form-input" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-priority">Prioridad:</label>
+                            <select id="task-priority" class="form-input">
+                                <option value="alta">Alta</option>
+                                <option value="media">Media</option>
+                                <option value="baja">Baja</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel">Cancelar</button>
+                    <button type="submit" id="task-submit" class="btn-save">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notificación de éxito -->
+    <div class="notification" id="notification" role="alert" aria-live="assertive"></div>
+
+    <!-- Scripts -->
+    <script src="script.js" type="module"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const STORAGE_KEY = "kanban_tasks";
+    const MODAL = document.getElementById("task-modal");
+    const MODAL_TITLE = document.getElementById("modal-title");
+    const TASK_FORM = document.getElementById("task-form");
+    const TASK_TITLE = document.getElementById("task-title");
+    const TASK_DESCRIPTION = document.getElementById("task-description");
+    const TASK_PRIORITY = document.getElementById("task-priority");
+    const NEW_TASK_BTN = document.getElementById("new-task-btn");
+    const NOTIFICATION = document.getElementById("notification");
+    const COLUMNS = {
+        todo: document.getElementById("todo-tasks"),
+        doing: document.getElementById("doing-tasks"),
+        done: document.getElementById("done-tasks"),
+    };
+
+    let tasks = [];
+
+    // Cargar desde localStorage
+    function loadTasks() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            tasks = JSON.parse(saved);
+        } else {
+            tasks = [];
+        }
+    }
+
+    // Guardar en localStorage
+    function saveTasks() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
+
+    // Mostrar notificación
+    function showNotification(message, type = "success") {
+        NOTIFICATION.textContent = message;
+        NOTIFICATION.className = `notification ${type}`;
+        setTimeout(() => NOTIFICATION.classList.remove("success", "error"), 3000);
+    }
+
+    // Crear tarjeta
+    function createTaskCard(task, columnId) {
+        const card = document.createElement("div");
+        card.className = "task-card";
+        card.setAttribute("data-id", task.id);
+        card.setAttribute("data-column", task.column);
+
+        card.innerHTML = `
+            <div class="task-content">
+                <h3 class="task-title">${task.title}</h3>
+                <p class="task-description">${task.description}</p>
+                <span class="task-priority" style="color: ${
+                    task.priority === "alta" ? "red" : task.priority === "media" ? "orange" : "green"
+                };">Prioridad: ${task.priority}</span>
+            </div>
+            <div class="task-actions">
+                <button class="btn-edit-task">Editar</button>
+                <button class="btn-move-task">Mover</button>
+                <button class="btn-delete-task">Borrar</button>
+            </div>
+        `;
+
+        COLUMNS[columnId].appendChild(card);
+    }
+
+    // Renderizar todas las tareas
+    function renderTasks() {
+        Object.values(COLUMNS).forEach((column) => {
+            column.innerHTML = "";
+        });
+
+        tasks.forEach((task) => {
+            createTaskCard(task, task.column);
+        });
+    }
+
+    // Abrir modal
+    function openModal(title, task = null) {
+        MODAL.classList.add("active");
+        MODAL_TITLE.textContent = title;
+        TASK_FORM.reset();
+
+        if (task) {
+            TASK_TITLE.value = task.title;
+            TASK_DESCRIPTION.value = task.description;
+            TASK_PRIORITY.value = task.priority;
+        }
+    }
+
+    // Cerrar modal
+    function closeModal() {
+        MODAL.classList.remove("active");
+    }
+
+    // Manejar evento de formulario
+    TASK_FORM.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const currentTask = tasks.find((t) => t.editing);
+        const newTask = {
+            id: currentTask ? currentTask.id : Date.now(),
+            title: TASK_TITLE.value.trim(),
+            description: TASK_DESCRIPTION.value.trim(),
+            priority: TASK_PRIORITY.value,
+            column: currentTask ? currentTask.column : "todo",
+            editing: false,
+        };
+
+        if (currentTask) {
+            Object.assign(currentTask, newTask);
+        } else {
+            tasks.push(newTask);
+        }
+
+        saveTasks();
+        renderTasks();
+        closeModal();
+        showNotification("Tarea guardada con éxito", "success");
+    });
+
+    // Manejar evento de nuevo task
+    NEW_TASK_BTN.addEventListener("click", () => {
+        openModal("Nueva tarea");
+    });
+
+    // Cerrar modal con botón o tecla ESC
+    document.addEventListener("click", (e) => {
+        if (e.target === MODAL) closeModal();
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && MODAL.classList.contains("active")) {
+            closeModal();
+        }
+    });
+
+    // Manejar eventos de botones en tarjetas
+    function setupCardActions() {
+        document.querySelectorAll(".task-card").forEach((card) => {
+            card
+                .querySelector(".btn-edit-task")
+                ?.addEventListener("click", () => {
+                    const taskId = card.getAttribute("data-id");
+                    const task = tasks.find((t) => t.id == taskId);
+                    openModal("Editar tarea", task);
+                    task.editing = true;
+                });
+
+            card
+                .querySelector(".btn-delete-task")
+                ?.addEventListener("click", () => {
+                    if (confirm("¿Estás seguro de que quieres borrar esta tarea?")) {
+                        const taskId = card.getAttribute("data-id");
+                        const index = tasks.findIndex((t) => t.id == taskId);
+                        if (index !== -1) {
+                            tasks.splice(index, 1);
+                            saveTasks();
+                            renderTasks();
+                            showNotification("Tarea eliminada con éxito", "success");
+                        }
+                    }
+                });
+
+            card
+                .querySelector(".btn-move-task")
+                ?.addEventListener("click", () => {
+                    const taskId = card.getAttribute("data-id");
+                    const task = tasks.find((t) => t.id == taskId);
+                    const currentIndex = Object.keys(COLUMNS).indexOf(task.column);
+                    const columns = ["todo", "doing", "done"];
+                    const nextIndex = (currentIndex + 1) % columns.length;
+                    const newColumn = columns[nextIndex];
+
+                    task.column = newColumn;
+                    saveTasks();
+                    renderTasks();
+                    showNotification("Tarea movida a " + newColumn, "success");
+                });
+        });
+    }
+
+    // Manejar filtros
+    function setupFilters() {
+        const filterAll = document.getElementById("filter-all");
+        const filterDoing = document.getElementById("filter-doing");
+        const filterDone = document.getElementById("filter-done");
+
+        function updateVisibility() {
+            tasks.forEach((task) => {
+                const card = document.querySelector(`.task-card[data-id="${task.id}"]`);
+                if (!card) return;
+
+                const show = (() => {
+                    if (filterAll.checked) return true;
+                    if (filterDoing.checked && task.column === "doing") return true;
+                    if (filterDone.checked && task.column === "done") return true;
+                    return false;
+                })();
+
+                card.style.display = show ? "block" : "none";
+            });
+        }
+
+        filterAll.addEventListener("change", updateVisibility);
+        filterDoing.addEventListener("change", updateVisibility);
+        filterDone.addEventListener("change", updateVisibility);
+    }
+
+    // Cerrar modal con botón cancelar
+    document.querySelector(".btn-cancel").addEventListener("click", closeModal);
+
+    // Inicialización
+    loadTasks();
+    renderTasks();
+    setupCardActions();
+    setupFilters();
+});
+</script>
+</body>
+</html>

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ROSTER, CHATTER, ACTIVITY_TPL, fatigueOf } from '../data/demo'
 import {
   ensureAuth, getAgents, getTasks, createTask, updateAgent, updateTask, postAgentStatus,
-  createAgent, deleteAgent, pingAgent, connectOfficeWS, getHealth, type AgentPatch, type AgentMood,
+  createAgent, deleteAgent, pingAgent, orchestrateCode, connectOfficeWS, getHealth,
+  type AgentPatch, type AgentMood,
 } from '../api'
 
 export interface LiveAgent {
@@ -41,6 +42,8 @@ export interface LiveTask {
   agentName?: string
   energy: number
   result?: string
+  provider?: string
+  model?: string
 }
 
 export interface ActivityItem {
@@ -282,6 +285,8 @@ export function useLiveOffice() {
               agentName: bAgents.find((x) => x.id === t.agent_id)?.name,
               energy: Math.round(rnd(30, 80)),
               result: t.result ?? undefined,
+              provider: t.provider ?? undefined,
+              model: t.model ?? undefined,
             })),
           )
         }
@@ -350,6 +355,8 @@ export function useLiveOffice() {
                 agentName: an,
                 energy: an ? prodEnergy(bAgents.find((x) => x.id === t.agent_id)?.status ?? 'idle', t.progress) : 50,
                 result: t.result ?? undefined,
+                provider: t.provider ?? undefined,
+                model: t.model ?? undefined,
               }
             }),
           )
@@ -442,7 +449,7 @@ export function useLiveOffice() {
   }, [mode, pushActivity])
 
   const sendChat = useCallback(
-    async (text: string) => {
+    async (text: string, override?: { provider: string; model: string }) => {
       const clean = text.trim()
       if (!clean) return
       const title = clean.slice(0, 60)
@@ -453,11 +460,14 @@ export function useLiveOffice() {
         pushActivity('Sistema', 'no hay agentes encendidos: enciende al menos uno en Studio ⏻', 'error')
         return
       }
+      // Modelo efectivo: el elegido en Studio se impone al del boss
+      const effProvider = override?.provider ?? orch.provider
+      const effModel = override?.model ?? orch.model
       pushActivity('Tú', `inyectaste requerimiento: «${clean}»`, 'warning')
       let taskId = `local-${seq}`
       // 1. Crear + asignar la misión en el backend (el orquestador la toma y camina a la mesa)
       try {
-        const created = await createTask(title, clean)
+        const created = await createTask(title, clean, 'medium', effProvider, effModel)
         taskId = created.id
         if (orch.backendId) {
           await updateTask(taskId, { agent_id: orch.backendId, status: 'in_progress' }).catch(() => undefined)
@@ -467,7 +477,7 @@ export function useLiveOffice() {
       }
       setTasks((prev) => [
         ...prev,
-        { id: taskId, title, desc: clean, priority: 'medium', status: 'in_progress', progress: 5, agentName: orch.name, energy: 45 },
+        { id: taskId, title, desc: clean, priority: 'medium', status: 'in_progress', progress: 5, agentName: orch.name, energy: 45, provider: effProvider, model: effModel },
       ])
       const stage = async (progress: number, log: string, feed: string) => {
         setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, progress, log } : a)))
@@ -487,46 +497,98 @@ export function useLiveOffice() {
             : a,
         ),
       )
-      pushActivity(orch.name, `${orch.name} tomó «${title}» ▶ (${orch.provider}/${orch.model})`, 'success')
-      // 2. Ejecutar de verdad con su proveedor (respuesta real, no anuncio)
+      pushActivity(orch.name, `${orch.name} tomó «${title}» ▶ (${effProvider}/${effModel})`, 'success')
       if (!orch.backendId) {
         pushActivity(orch.name, `${orch.name} es local: sin backend no puede ejecutar`, 'warning')
         return
       }
+
+      // ¿Es una petición de generación de código? Si lo es, boss DELEGA de verdad.
+      const isCode = /\b(c[óo]digo|html|css|js|javascript|script|crud|componente|app|función|funcion|programa|snippet|kanban|formulario|p[áa]gina|web)\b/i.test(clean)
+
       try {
-        await sleep(2500)
-        await stage(25, 'investigando…', 'está investigando 🔍')
-        const res = await pingAgent(orch.backendId, clean, 400)
-        if (res.ok && res.reply) {
-          await stage(65, 'redactando hoja…', 'está redactando la hoja 📝')
-          const doc: LiveDoc = {
-            id: `doc-${seq++}`,
-            title,
-            question: clean,
-            full: res.reply,
-            agentName: orch.name,
-            agentId: orch.id,
-            fresh: true,
-            time: now(),
-            taskId,
+        if (isCode) {
+          // === DELEGACIÓN REAL: boss → pixel (CSS) + max (JS) → ensambla ===
+          await sleep(1500)
+          await stage(20, 'descomponiendo…', 'descompone la misión y delega a Pixel y Max 🧩')
+          const res = await orchestrateCode(clean, override)
+          if (res.ok && res.final) {
+            // reflejar el trabajo de cada agente en la oficina
+            const steps = res.steps ?? []
+            for (const s of steps) {
+              const who = agents.find((a) => a.name.toLowerCase() === s.agent.toLowerCase())
+              if (who) {
+                pushActivity(who.name, `${who.name} entregó ${s.role} con ${s.provider}/${s.model} (${s.tokens} tok)`, 'success')
+                setAgents((prev) => prev.map((a) => (a.id === who.id ? { ...a, status: 'completed', log: `${s.role} ✓`, progress: 100 } : a)))
+              }
+            }
+            await stage(80, 'ensamblando…', 'ensambla el entregable final 🧱')
+            const doc: LiveDoc = {
+              id: `doc-${seq++}`,
+              title,
+              question: clean,
+              full: res.final,
+              agentName: orch.name,
+              agentId: orch.id,
+              fresh: true,
+              time: now(),
+              taskId,
+            }
+            setDocs((prev) => [doc, ...prev].slice(0, 12))
+            const breakdown = steps.map((s) => `${s.agent}=${s.role} (${s.model})`).join(' · ')
+            setChat((prev) =>
+              [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Código completo ensamblado. Delegación: ${breakdown}. Tócalo en la mesa. (${res.total_tokens ?? '?'} tok)` }].slice(-30),
+            )
+            pushActivity(orch.name, `${orch.name} entregó el código completo 📄 (${res.total_tokens ?? '?'} tok)`, 'success')
+            try {
+              await updateTask(taskId, { status: 'completed', progress: 100, result: res.final.slice(0, 20000), tokens_used: res.total_tokens ?? 0, provider: effProvider, model: effModel })
+              if (orch.backendId) await postAgentStatus(orch.backendId, 'completed', 100).catch(() => undefined)
+            } catch {
+              /* noop */
+            }
+            setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100, result: res.final, provider: effProvider, model: effModel } : t)))
+            setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, status: 'completed', progress: 100, log: 'entregado ✓' } : a)))
+          } else {
+            pushActivity(orch.name, `Delegación falló: ${res.error ?? 'sin respuesta'}`, 'error')
+            setChat((prev) => [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `No pude completar la delegación: ${res.error ?? 'sin respuesta del proveedor'}` }].slice(-30))
+            setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'blocked' } : t)))
           }
-          setDocs((prev) => [doc, ...prev].slice(0, 12))
-          setChat((prev) =>
-            [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Dejé la hoja en la mesa de juntas — tócala para seguir el hilo. (${res.tokens ?? '?'} tok)` }].slice(-30),
-          )
-          pushActivity(orch.name, `${orch.name} entregó documento en la mesa 📄 (${res.tokens ?? '?'} tok)`, 'success')
-          try {
-            await updateTask(taskId, { status: 'completed', progress: 100, result: res.reply.slice(0, 2000), tokens_used: res.tokens ?? 0 })
-            if (orch.backendId) await postAgentStatus(orch.backendId, 'completed', 100).catch(() => undefined)
-          } catch {
-            /* noop */
+        } else {
+          // === Petición normal: boss responde solo, con presupuesto amplio ===
+          await sleep(2000)
+          await stage(35, 'investigando…', 'está investigando 🔍')
+          const res = await pingAgent(orch.backendId, clean, 4000, override)
+          if (res.ok && res.reply) {
+            await stage(70, 'redactando hoja…', 'está redactando la hoja 📝')
+            const doc: LiveDoc = {
+              id: `doc-${seq++}`,
+              title,
+              question: clean,
+              full: res.reply,
+              agentName: orch.name,
+              agentId: orch.id,
+              fresh: true,
+              time: now(),
+              taskId,
+            }
+            setDocs((prev) => [doc, ...prev].slice(0, 12))
+            setChat((prev) =>
+              [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Dejé la hoja en la mesa de juntas — tócala para seguir el hilo. (${res.tokens ?? '?'} tok · ${res.model})` }].slice(-30),
+            )
+            pushActivity(orch.name, `${orch.name} entregó documento en la mesa 📄 (${res.tokens ?? '?'} tok)`, 'success')
+            try {
+              await updateTask(taskId, { status: 'completed', progress: 100, result: res.reply.slice(0, 20000), tokens_used: res.tokens ?? 0, provider: res.provider ?? effProvider, model: res.model ?? effModel })
+              if (orch.backendId) await postAgentStatus(orch.backendId, 'completed', 100).catch(() => undefined)
+            } catch {
+              /* noop */
+            }
+            setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100, result: res.reply, provider: res.provider ?? effProvider, model: res.model ?? effModel } : t)))
+            setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, status: 'completed', progress: 100, log: 'entregado ✓' } : a)))
+          } else if (res.mood) {
+            setMood(orch.id, res.mood)
+            setChat((prev) => [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: res.mood!.headline }].slice(-30))
+            pushActivity(orch.name, `${res.mood.headline}`, 'warning')
           }
-          setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100, result: res.reply } : t)))
-          setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, status: 'completed', progress: 100, log: 'entregado ✓' } : a)))
-        } else if (res.mood) {
-          setMood(orch.id, res.mood)
-          setChat((prev) => [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: res.mood!.headline }].slice(-30))
-          pushActivity(orch.name, `${res.mood.headline}`, 'warning')
         }
       } catch {
         pushActivity(orch.name, `${orch.name} no pudo ejecutar (red local)`, 'error')
@@ -536,6 +598,7 @@ export function useLiveOffice() {
         }, 9000)
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pushActivity, agents],
   )
 
@@ -853,7 +916,7 @@ export function useLiveOffice() {
       const history = (agentChats[agentId] ?? []).slice(-6).map((m) => `${m.role === 'user' ? 'Usuario' : ag.name}: ${m.text}`).join('\n')
       const prompt = history ? `${history}\nUsuario: ${clean}` : clean
       try {
-        const res = await pingAgent(ag.backendId, prompt, 1500)
+        const res = await pingAgent(ag.backendId, prompt, 4000)
         if (res.ok && res.reply) {
           setAgentChats((prev) => ({
             ...prev,

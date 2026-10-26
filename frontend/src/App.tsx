@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
 import { OfficeScene } from './components/office/OfficeScene'
 import { StudioPanel } from './components/StudioPanel'
+import { ProvidersSidebar } from './components/ProvidersSidebar'
 import { KanbanBoard } from './components/KanbanBoard'
 import { ProvidersPanel } from './components/ProvidersPanel'
 import { SkillsPanel } from './components/SkillsPanel'
@@ -34,10 +35,13 @@ const NAV: [string, string][] = [
 
 export default function App() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [openDocId, setOpenDocId] = useState<string | null>(null)
   const [skillsTick, setSkillsTick] = useState(0)
+  const [provTick, setProvTick] = useState(0)
+  const onProvidersRoute = location.pathname.startsWith('/proveedores')
   const live = useLiveOffice()
   const {
     agents, tasks, docs, chat, backendOk, wsLive, version,
@@ -123,20 +127,24 @@ export default function App() {
           </div>
         </header>
 
-        {/* cuerpo: studio izquierda + vista enrutada */}
+        {/* cuerpo: sidebar izquierda (Studio, o Playground/Proveedores en /proveedores) + vista enrutada */}
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 12, alignItems: 'start' }}>
-          <StudioPanel
-            agents={agents}
-            chat={chat}
-            onSend={sendChat}
-            onEdit={setEditingId}
-            onPause={pauseAgent}
-            onResume={resumeAgent}
-            onTogglePower={togglePower}
-            onAddAgent={addAgent}
-            onChat={openAgentChat}
-            selectedId={selectedAgentId}
-          />
+          {onProvidersRoute ? (
+            <ProvidersSidebar onChanged={() => setProvTick((n) => n + 1)} />
+          ) : (
+            <StudioPanel
+              agents={agents}
+              chat={chat}
+              onSend={sendChat}
+              onEdit={setEditingId}
+              onPause={pauseAgent}
+              onResume={resumeAgent}
+              onTogglePower={togglePower}
+              onAddAgent={addAgent}
+              onChat={openAgentChat}
+              selectedId={selectedAgentId}
+            />
+          )}
 
           <main style={{ minWidth: 0 }}>
             <Routes>
@@ -166,7 +174,7 @@ export default function App() {
                   />
                 }
               />
-              <Route path="/proveedores" element={<ProvidersPanel onProviderSaved={providerMeeting} />} />
+              <Route path="/proveedores" element={<ProvidersPanel onProviderSaved={providerMeeting} refreshToken={provTick} />} />
               <Route
                 path="/agente/:id"
                 element={

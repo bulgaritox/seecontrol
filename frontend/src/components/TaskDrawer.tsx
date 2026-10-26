@@ -65,7 +65,15 @@ export function TaskDrawer({ task, agent, onClose, onControl, onExtend }: Props)
           <button onClick={onClose} style={{ background: '#262626', color: '#fff', border: '1px solid #333', borderRadius: 6, cursor: 'pointer', padding: '4px 10px' }}>✕</button>
         </div>
         <div style={{ fontSize: 14, fontWeight: 'bold', color: '#fff', marginTop: 6 }}>{task.title}</div>
-        <div style={{ fontSize: 11, color: '#A8A29E', marginTop: 4, whiteSpace: 'pre-wrap' }}>{task.desc}</div>
+        {task.model && (
+          <div
+            title={`Modelo usado para esta tarea: ${task.provider ? `${task.provider}/` : ''}${task.model}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#C4B5FD', background: '#2E1065', border: '1px solid #4C1D95', borderRadius: 6, padding: '3px 9px', marginTop: 7 }}
+          >
+            🧠 Modelo: <b>{task.provider ? `${task.provider}/` : ''}{task.model}</b>
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: '#A8A29E', marginTop: 6, whiteSpace: 'pre-wrap' }}>{task.desc}</div>
         {task.result && (
           <div style={{ marginTop: 8, background: '#FFFBEB', border: '2px solid #F59E0B', borderRadius: 8, padding: 10 }}>
             <div style={{ fontSize: 10, fontFamily: GB, color: '#92400E', marginBottom: 4 }}>📄 ENTREGABLE EN LA MESA</div>

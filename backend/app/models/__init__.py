@@ -8,6 +8,7 @@ from .mission import Mission, MissionDifficulty, MissionStatus
 from .workspace import Workspace, WorkspacePlan
 from .token_usage import TokenUsage
 from .webhook import Webhook
+from .provider_credential import ProviderCredential
 
 __all__ = [
     "Base",
@@ -28,4 +29,5 @@ __all__ = [
     "WorkspacePlan",
     "TokenUsage",
     "Webhook",
+    "ProviderCredential",
 ]

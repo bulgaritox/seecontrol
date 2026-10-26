@@ -95,7 +95,47 @@ async def init_db():
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
         
+        # Migración ligera: añade columnas nuevas a tablas existentes (idempotente).
+        await conn.run_sync(_ensure_columns)
+        
         logger.info("Database tables created/verified")
+
+
+def _ensure_columns(sync_conn) -> None:
+    """Añade columnas que pueden faltar en una DB ya creada.
+    create_all no altera tablas existentes, así que lo hacemos a mano.
+    Funciona en SQLite y Postgres; ignora errores de 'ya existe'."""
+    from sqlalchemy import inspect as sa_inspect, text
+
+    inspector = sa_inspect(sync_conn)
+
+    # Columnas nuevas esperadas por tabla
+    wanted = {
+        "tasks": {
+            "provider": "VARCHAR(60)",
+            "model": "VARCHAR(120)",
+        },
+    }
+    try:
+        existing_tables = set(inspector.get_table_names())
+    except Exception:
+        existing_tables = set()
+
+    for table, cols in wanted.items():
+        if table not in existing_tables:
+            continue
+        try:
+            present = {c["name"] for c in inspector.get_columns(table)}
+        except Exception:
+            present = set()
+        for col, ddl in cols.items():
+            if col in present:
+                continue
+            try:
+                sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+                logger.info("Migración: columna %s.%s añadida", table, col)
+            except Exception as e:  # columna ya existe u otra condición benigna
+                logger.warning("Migración %s.%s omitida: %s", table, col, e)
 
 
 async def close_db():
