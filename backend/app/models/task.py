@@ -51,6 +51,14 @@ class Task(Base, BaseModel):
     provider: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     
+    # Project grouping: el orquestador agrupa las subtareas de una misión bajo un
+    # mismo proyecto. project_brief es el "paper" general (objetivo + cómo encajan
+    # las partes) que viaja con cada subtarea delegada para no dejar huecos al ensamblar.
+    project_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    project_name: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    project_brief: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    role_label: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    
     # Dependencies
     dependencies: Mapped[List[str]] = mapped_column(JSON, default=[], nullable=False)
     
@@ -117,5 +125,8 @@ class Task(Base, BaseModel):
             "agent_id": str(self.agent_id) if self.agent_id else None,
             "provider": self.provider,
             "model": self.model,
+            "project_id": self.project_id,
+            "project_name": self.project_name,
+            "role_label": self.role_label,
             "timestamp": datetime.utcnow().isoformat(),
         }

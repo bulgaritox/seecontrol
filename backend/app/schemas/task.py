@@ -27,6 +27,11 @@ class TaskCreate(TaskBase):
     provider: Optional[str] = Field(default=None, max_length=60)
     model: Optional[str] = Field(default=None, max_length=120)
     
+    project_id: Optional[str] = Field(default=None, max_length=100)
+    project_name: Optional[str] = Field(default=None, max_length=160)
+    project_brief: Optional[str] = None
+    role_label: Optional[str] = Field(default=None, max_length=40)
+    
     dependencies: List[str] = Field(default=[])
     
     max_retries: int = Field(default=3, ge=0, le=10)
@@ -49,6 +54,11 @@ class TaskUpdate(BaseModel):
     agent_id: Optional[str] = Field(default=None, max_length=100)
     provider: Optional[str] = Field(default=None, max_length=60)
     model: Optional[str] = Field(default=None, max_length=120)
+    
+    project_id: Optional[str] = Field(default=None, max_length=100)
+    project_name: Optional[str] = Field(default=None, max_length=160)
+    project_brief: Optional[str] = None
+    role_label: Optional[str] = Field(default=None, max_length=40)
     
     dependencies: Optional[List[str]] = None
     
@@ -81,6 +91,11 @@ class TaskResponse(TaskBase):
     agent_id: Optional[str]
     provider: Optional[str] = None
     model: Optional[str] = None
+    
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+    project_brief: Optional[str] = None
+    role_label: Optional[str] = None
     
     dependencies: List[str]
     

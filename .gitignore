@@ -151,3 +151,7 @@ __pycache__/
 *.db
 .pytest_cache/
 .mypy_cache/
+
+# SeeControl: carpeta temporal de artefactos de agentes por proyecto
+_workspace/
+backend/_workspace/

@@ -515,8 +515,13 @@ class LLMService:
             headers["HTTP-Referer"] = "https://seecontrol.local"
             headers["X-Title"] = "SeeControl"
         payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+        # Timeout granular: conectar rápido, pero dar margen de lectura a modelos
+        # que generan respuestas largas. Si el provider cuelga, corta y falla
+        # (la capa de delegación reintenta con otro provider).
+        _t = provider_timeout(provider_id)
+        timeout = httpx.Timeout(connect=10.0, read=float(_t), write=30.0, pool=10.0)
         try:
-            async with httpx.AsyncClient(base_url=base, timeout=provider_timeout(provider_id), headers=headers) as c:
+            async with httpx.AsyncClient(base_url=base, timeout=timeout, headers=headers) as c:
                 r = await c.post(path, json=payload)
                 r.raise_for_status()
                 data = r.json()
@@ -536,7 +541,12 @@ class LLMService:
                 pass
             if e.response.status_code == 429:
                 raise LLMError(f"{provider_id}: rate limit / sin saldo", provider_id, retryable=True)
-            raise LLMError(f"{provider_id} error {e.response.status_code}: {body}", provider_id)
+            # 5xx del proveedor: reintentable (puede recuperarse / probar otro)
+            retry5xx = 500 <= e.response.status_code < 600
+            raise LLMError(f"{provider_id} error {e.response.status_code}: {body}", provider_id, retryable=retry5xx)
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as e:
+            # Cuelgue / timeout / corte de red: reintentable y se puede probar otro provider.
+            raise LLMError(f"{provider_id} timeout/red: {type(e).__name__}", provider_id, retryable=True)
         except LLMError:
             raise
         except Exception as e:

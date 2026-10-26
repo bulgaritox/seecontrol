@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { LiveAgent, LiveTask, AgentChatMsg } from '../hooks/useLiveOffice'
 import { AgentSprite } from './office/AgentSprite'
@@ -26,6 +26,7 @@ interface Props {
   onSend: (agentId: string, text: string) => void
   onClear: (agentId: string) => void
   onOpenTask?: (taskId: string) => void
+  onDeleteTask?: (taskId: string) => void
 }
 
 /**
@@ -33,7 +34,7 @@ interface Props {
  * Dos pestañas: CHAT (conversación directa tipo GPT) e HISTORIAL
  * (tareas que el orquestador asignó a este agente).
  */
-export function AgentChatDock({ agent, messages, thinking, tasks, onClose, onSend, onClear, onOpenTask }: Props) {
+export function AgentChatDock({ agent, messages, thinking, tasks, onClose, onSend, onClear, onOpenTask, onDeleteTask }: Props) {
   const [tab, setTab] = useState<'chat' | 'historial'>('chat')
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -53,6 +54,31 @@ export function AgentChatDock({ agent, messages, thinking, tasks, onClose, onSen
     onSend(agent.id, t)
     setInput('')
   }
+
+  // Agrupa las tareas del agente por proyecto (primero proyectos, luego sueltas)
+  const projectGroups = useMemo(() => {
+    const NO_PROJECT = '__sin_proyecto__'
+    const map = new Map<string, { id: string; name: string; brief?: string; tasks: LiveTask[] }>()
+    for (const t of tasks) {
+      const key = t.projectId ?? NO_PROJECT
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          name: t.projectName ?? (key === NO_PROJECT ? 'Tareas sueltas' : 'Proyecto'),
+          brief: t.projectBrief,
+          tasks: [],
+        })
+      }
+      const g = map.get(key)!
+      if (!g.brief && t.projectBrief) g.brief = t.projectBrief
+      g.tasks.push(t)
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.id === NO_PROJECT) return 1
+      if (b.id === NO_PROJECT) return -1
+      return 0
+    })
+  }, [tasks])
 
   return (
     <div
@@ -196,34 +222,67 @@ export function AgentChatDock({ agent, messages, thinking, tasks, onClose, onSen
           </div>
         </>
       ) : (
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 10, fontFamily: GB, color: '#78716C', marginBottom: 2 }}>TAREAS ASIGNADAS POR EL ORQUESTADOR</div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 10, fontFamily: GB, color: '#78716C', marginBottom: 2 }}>PROYECTOS Y TAREAS DE {agent.name.toUpperCase()}</div>
           {tasks.length === 0 && (
             <div style={{ color: '#57534E', fontSize: 12, textAlign: 'center', marginTop: 20 }}>
               Aún no hay tareas asignadas a {agent.name}.<br />
-              <span style={{ fontSize: 10 }}>Cuando el orquestador le delegue trabajo, aparecerá aquí su historial.</span>
+              <span style={{ fontSize: 10 }}>Cuando el orquestador le delegue trabajo, aparecerá aquí su historial agrupado por proyecto.</span>
             </div>
           )}
-          {tasks.map((t) => {
-            const done = t.status === 'completed'
-            const col = done ? '#22C55E' : t.status === 'blocked' ? '#EF4444' : t.status === 'paused' ? '#F59E0B' : '#38BDF8'
-            return (
-              <button
-                key={t.id}
-                onClick={() => onOpenTask?.(t.id)}
-                style={{ textAlign: 'left', background: '#161616', border: `1px solid #2A2A2A`, borderLeft: `3px solid ${col}`, borderRadius: 8, padding: '8px 10px', cursor: 'pointer', color: '#fff' }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
-                  <span style={{ fontSize: 9, color: col, textTransform: 'uppercase', flexShrink: 0 }}>{t.status}</span>
+          {projectGroups.map((g) => (
+            <div key={g.id} style={{ background: '#121212', border: '1px solid #262626', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '7px 10px', background: 'linear-gradient(90deg,#1E1B4B,#121212)', borderBottom: '1px solid #312E81' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 'bold', color: '#C7D2FE', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>📁 {g.name}</span>
+                  <span style={{ fontSize: 9, color: '#818CF8', flexShrink: 0 }}>({g.tasks.length})</span>
                 </div>
-                <div style={{ fontSize: 11, color: '#A8A29E', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.desc}</div>
-                <div style={{ height: 5, background: '#2A2A2A', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}>
-                  <div style={{ width: `${t.progress}%`, height: '100%', background: col }} />
-                </div>
-              </button>
-            )
-          })}
+                {g.brief && (
+                  <div title={g.brief} style={{ fontSize: 9.5, color: '#9CA3AF', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    📋 {g.brief}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8 }}>
+                {g.tasks.map((t) => {
+                  const done = t.status === 'completed'
+                  const col = done ? '#22C55E' : t.status === 'blocked' ? '#EF4444' : t.status === 'paused' ? '#F59E0B' : '#38BDF8'
+                  return (
+                    <div key={t.id} style={{ background: '#161616', border: `1px solid #2A2A2A`, borderLeft: `3px solid ${col}`, borderRadius: 8, padding: '8px 10px', color: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>
+                        <button
+                          onClick={() => onOpenTask?.(t.id)}
+                          title="Abrir tarea"
+                          style={{ flex: 1, textAlign: 'left', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, minWidth: 0 }}
+                        >
+                          <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            {t.roleLabel && <span style={{ fontSize: 8, fontWeight: 'bold', color: '#FDE68A', background: '#422006', border: '1px solid #854D0E', borderRadius: 4, padding: '0 5px', flexShrink: 0 }}>{t.roleLabel}</span>}
+                            <span style={{ fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                          </span>
+                        </button>
+                        <span style={{ fontSize: 9, color: col, textTransform: 'uppercase', flexShrink: 0 }}>{t.status}</span>
+                        {onDeleteTask && (
+                          <button
+                            onClick={() => { if (window.confirm(`¿Eliminar «${t.title}»?`)) onDeleteTask(t.id) }}
+                            title="Eliminar tarea"
+                            style={{ fontSize: 11, background: '#2A1212', color: '#F87171', border: '1px solid #7F1D1D', borderRadius: 5, padding: '1px 6px', cursor: 'pointer', flexShrink: 0 }}
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </div>
+                      {t.model && (
+                        <div style={{ fontSize: 9, color: '#C4B5FD', marginTop: 3 }}>🧠 {t.provider ? `${t.provider}/` : ''}{t.model}</div>
+                      )}
+                      <div style={{ height: 5, background: '#2A2A2A', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}>
+                        <div style={{ width: `${t.progress}%`, height: '100%', background: col }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -114,6 +114,10 @@ async def list_tasks(
                 agent_id=t.agent_id,
                 provider=t.provider,
                 model=t.model,
+                project_id=t.project_id,
+                project_name=t.project_name,
+                project_brief=t.project_brief,
+                role_label=t.role_label,
                 dependencies=t.dependencies,
                 result=t.result,
                 result_data=t.result_data,
@@ -192,6 +196,10 @@ async def get_task(
         agent_id=task.agent_id,
         provider=task.provider,
         model=task.model,
+        project_id=task.project_id,
+        project_name=task.project_name,
+        project_brief=task.project_brief,
+        role_label=task.role_label,
         dependencies=task.dependencies,
         result=task.result,
         result_data=task.result_data,
@@ -270,6 +278,10 @@ async def create_task(
         agent_id=task_data.agent_id,
         provider=task_data.provider,
         model=task_data.model,
+        project_id=task_data.project_id,
+        project_name=task_data.project_name,
+        project_brief=task_data.project_brief,
+        role_label=task_data.role_label,
         dependencies=task_data.dependencies or [],
         user_id=user_id,
         workspace_id=str(workspace.id),
@@ -320,6 +332,10 @@ async def create_task(
         agent_id=task.agent_id,
         provider=task.provider,
         model=task.model,
+        project_id=task.project_id,
+        project_name=task.project_name,
+        project_brief=task.project_brief,
+        role_label=task.role_label,
         dependencies=task.dependencies,
         result=task.result,
         result_data=task.result_data,
@@ -400,6 +416,14 @@ async def update_task(
         task.provider = task_data.provider
     if task_data.model is not None:
         task.model = task_data.model
+    if task_data.project_id is not None:
+        task.project_id = task_data.project_id
+    if task_data.project_name is not None:
+        task.project_name = task_data.project_name
+    if task_data.project_brief is not None:
+        task.project_brief = task_data.project_brief
+    if task_data.role_label is not None:
+        task.role_label = task_data.role_label
     if task_data.dependencies is not None:
         task.dependencies = task_data.dependencies
     if task_data.result is not None:
@@ -483,6 +507,10 @@ async def update_task(
         agent_id=task.agent_id,
         provider=task.provider,
         model=task.model,
+        project_id=task.project_id,
+        project_name=task.project_name,
+        project_brief=task.project_brief,
+        role_label=task.role_label,
         dependencies=task.dependencies,
         result=task.result,
         result_data=task.result_data,
@@ -562,3 +590,59 @@ async def delete_task(
     await db.commit()
     
     logger.info(f"Task deleted: {task.title} (ID: {task.id})")
+
+
+# ============================================
+# DELETE ALL TASKS OF A PROJECT
+# ============================================
+
+@router.delete("/project/{project_id}", status_code=status.HTTP_200_OK)
+async def delete_project_tasks(
+    project_id: str,
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """Elimina todas las tareas agrupadas bajo un mismo proyecto.
+
+    Útil para limpiar un proyecto completo (todas sus subtareas) desde el Kanban.
+    """
+    payload = auth_service.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    user_id = payload.get("sub")
+
+    result = await db.execute(
+        select(Task).where(Task.project_id == project_id)
+    )
+    tasks = result.scalars().all()
+
+    if not tasks:
+        return {"deleted": 0, "project_id": project_id}
+
+    # Verifica permiso usando la primera tarea (todas comparten dueño/workspace)
+    owner_id = tasks[0].user_id
+    if owner_id != user_id:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    # Libera agentes asignados a esas tareas
+    agent_ids = {t.agent_id for t in tasks if t.agent_id}
+    for aid in agent_ids:
+        res = await db.execute(select(Agent).where(Agent.id == aid))
+        agent = res.scalar_one_or_none()
+        if agent:
+            agent.status = AgentStatus.IDLE
+            agent.current_task = None
+            agent.current_task_id = None
+
+    count = 0
+    for t in tasks:
+        await db.delete(t)
+        count += 1
+    await db.commit()
+
+    logger.info(f"Proyecto {project_id}: {count} tareas eliminadas")
+    return {"deleted": count, "project_id": project_id}

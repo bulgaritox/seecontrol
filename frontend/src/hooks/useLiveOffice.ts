@@ -3,6 +3,7 @@ import { ROSTER, CHATTER, ACTIVITY_TPL, fatigueOf } from '../data/demo'
 import {
   ensureAuth, getAgents, getTasks, createTask, updateAgent, updateTask, postAgentStatus,
   createAgent, deleteAgent, pingAgent, orchestrateCode, connectOfficeWS, getHealth,
+  deleteTask as apiDeleteTask, deleteProjectTasks as apiDeleteProjectTasks,
   type AgentPatch, type AgentMood,
 } from '../api'
 
@@ -15,6 +16,8 @@ export interface LiveAgent {
   hair: string
   shirt: string
   cut: string
+  glasses?: boolean
+  skin?: string
   provider: string
   model: string
   skills: string[]
@@ -44,6 +47,10 @@ export interface LiveTask {
   result?: string
   provider?: string
   model?: string
+  projectId?: string
+  projectName?: string
+  projectBrief?: string
+  roleLabel?: string
 }
 
 export interface ActivityItem {
@@ -72,6 +79,12 @@ export interface LiveDoc {
   fresh: boolean
   time: string
   taskId?: string
+  // Entregable descargable (código ensamblado) + metadatos del proyecto
+  code?: string
+  filename?: string
+  projectName?: string
+  artifacts?: string[]
+  workspaceDir?: string
 }
 
 // Mensaje de una conversación directa con un agente (modo "GPT/chatbot")
@@ -93,7 +106,7 @@ let seq = 1
 
 const now = () => new Date().toLocaleTimeString('es', { hour12: false })
 
-type Look = { hair: string; shirt: string; character: string; cut?: string }
+type Look = { hair: string; shirt: string; character: string; cut?: string; glasses?: boolean; skin?: string }
 function loadLooks(): Record<string, Look> {
   try {
     return JSON.parse(localStorage.getItem('sc_look') ?? '{}') as Record<string, Look>
@@ -235,7 +248,7 @@ export function useLiveOffice() {
     return list.map((a) => {
       const key = a.backendId ?? a.id
       const l = looks[key] ?? looks[a.name]
-      return l ? { ...a, hair: l.hair, shirt: l.shirt, character: l.character, cut: l.cut ?? a.cut } : a
+      return l ? { ...a, hair: l.hair, shirt: l.shirt, character: l.character, cut: l.cut ?? a.cut, glasses: l.glasses ?? a.glasses, skin: l.skin ?? a.skin } : a
     })
   }, [])
 
@@ -287,6 +300,10 @@ export function useLiveOffice() {
               result: t.result ?? undefined,
               provider: t.provider ?? undefined,
               model: t.model ?? undefined,
+              projectId: t.project_id ?? undefined,
+              projectName: t.project_name ?? undefined,
+              projectBrief: t.project_brief ?? undefined,
+              roleLabel: t.role_label ?? undefined,
             })),
           )
         }
@@ -357,6 +374,10 @@ export function useLiveOffice() {
                 result: t.result ?? undefined,
                 provider: t.provider ?? undefined,
                 model: t.model ?? undefined,
+                projectId: t.project_id ?? undefined,
+                projectName: t.project_name ?? undefined,
+                projectBrief: t.project_brief ?? undefined,
+                roleLabel: t.role_label ?? undefined,
               }
             }),
           )
@@ -464,21 +485,29 @@ export function useLiveOffice() {
       const effProvider = override?.provider ?? orch.provider
       const effModel = override?.model ?? orch.model
       pushActivity('Tú', `inyectaste requerimiento: «${clean}»`, 'warning')
+
+      // ¿Es una petición de generación de código/sitio? Si lo es, boss DELEGA de verdad
+      // y el BACKEND crea las tareas reales del proyecto (Misión/HTML/CSS/JS/ENTREGA).
+      // Para no dejar una tarea "suelta" duplicada, en ese caso NO creamos placeholder.
+      const isCode = /\b(c[óo]digo|html|css|js|javascript|script|crud|componente|app|función|funcion|programa|snippet|kanban|formulario|p[áa]gina|web|sitio|landing|tailwind|responsive|dashboard|portal|servicios?|front\s?end|frontend|ui|interfaz)\b/i.test(clean)
+
       let taskId = `local-${seq}`
-      // 1. Crear + asignar la misión en el backend (el orquestador la toma y camina a la mesa)
-      try {
-        const created = await createTask(title, clean, 'medium', effProvider, effModel)
-        taskId = created.id
-        if (orch.backendId) {
-          await updateTask(taskId, { agent_id: orch.backendId, status: 'in_progress' }).catch(() => undefined)
+      if (!isCode) {
+        // Petición normal: creamos la tarea placeholder (Boss responde solo).
+        try {
+          const created = await createTask(title, clean, 'medium', effProvider, effModel)
+          taskId = created.id
+          if (orch.backendId) {
+            await updateTask(taskId, { agent_id: orch.backendId, status: 'in_progress' }).catch(() => undefined)
+          }
+        } catch {
+          pushActivity('Sistema', 'backend no respondió al crear: sigo en local', 'warning')
         }
-      } catch {
-        pushActivity('Sistema', 'backend no respondió al crear: sigo en local', 'warning')
+        setTasks((prev) => [
+          ...prev,
+          { id: taskId, title, desc: clean, priority: 'medium', status: 'in_progress', progress: 5, agentName: orch.name, energy: 45, provider: effProvider, model: effModel },
+        ])
       }
-      setTasks((prev) => [
-        ...prev,
-        { id: taskId, title, desc: clean, priority: 'medium', status: 'in_progress', progress: 5, agentName: orch.name, energy: 45, provider: effProvider, model: effModel },
-      ])
       const stage = async (progress: number, log: string, feed: string) => {
         setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, progress, log } : a)))
         setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, progress } : t)))
@@ -503,9 +532,6 @@ export function useLiveOffice() {
         return
       }
 
-      // ¿Es una petición de generación de código? Si lo es, boss DELEGA de verdad.
-      const isCode = /\b(c[óo]digo|html|css|js|javascript|script|crud|componente|app|función|funcion|programa|snippet|kanban|formulario|p[áa]gina|web)\b/i.test(clean)
-
       try {
         if (isCode) {
           // === DELEGACIÓN REAL: boss → pixel (CSS) + max (JS) → ensambla ===
@@ -522,32 +548,54 @@ export function useLiveOffice() {
                 setAgents((prev) => prev.map((a) => (a.id === who.id ? { ...a, status: 'completed', log: `${s.role} ✓`, progress: 100 } : a)))
               }
             }
-            await stage(80, 'ensamblando…', 'ensambla el entregable final 🧱')
+            await stage(80, 'ensamblando…', 'Boss conecta las devoluciones de la carpeta del proyecto 🧱')
+            // Muestra la carpeta temporal y los archivos que cada agente dejó
+            if (res.artifacts && res.artifacts.length) {
+              pushActivity(orch.name, `📁 ${res.workspace_dir ?? 'carpeta'}: ${res.artifacts.length} archivos de los agentes`, 'info')
+            }
+            const artifactsNote = res.artifacts && res.artifacts.length
+              ? `\n\n---\n📁 Carpeta del proyecto: ${res.workspace_dir}\nArchivos entregados por los agentes:\n${res.artifacts.map((a) => `• ${a}`).join('\n')}`
+              : ''
+            // Nombre de archivo a partir del proyecto (slug) + extensión por contenido
+            const slug = (res.project_name || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'index'
+            const ext = /<html|<!doctype/i.test(res.final) ? 'html' : 'txt'
             const doc: LiveDoc = {
               id: `doc-${seq++}`,
               title,
               question: clean,
-              full: res.final,
+              full: res.final + artifactsNote,
               agentName: orch.name,
               agentId: orch.id,
               fresh: true,
               time: now(),
               taskId,
+              code: res.final,
+              filename: `${slug}.${ext}`,
+              projectName: res.project_name,
+              artifacts: res.artifacts,
+              workspaceDir: res.workspace_dir,
             }
             setDocs((prev) => [doc, ...prev].slice(0, 12))
+            const who2 = res.delegated ? res.delegated.join(' + ') : steps.map((s) => s.agent).join(' + ')
             const breakdown = steps.map((s) => `${s.agent}=${s.role} (${s.model})`).join(' · ')
+            const partialNote = res.partial ? ` ⚠️ Entrega parcial: ${res.partial_error ?? 'un paso falló'}.` : ''
             setChat((prev) =>
-              [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Código completo ensamblado. Delegación: ${breakdown}. Tócalo en la mesa. (${res.total_tokens ?? '?'} tok)` }].slice(-30),
+              [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Proyecto «${res.project_name ?? '—'}» ensamblado.${partialNote} Agentes: ${who2}. Delegación: ${breakdown}. (${res.total_tokens ?? '?'} tok)` }].slice(-30),
             )
-            pushActivity(orch.name, `${orch.name} entregó el código completo 📄 (${res.total_tokens ?? '?'} tok)`, 'success')
+            pushActivity(orch.name, `${orch.name} entregó «${res.project_name ?? '—'}» 📄 (${res.total_tokens ?? '?'} tok · ${who2})`, res.partial ? 'warning' : 'success')
+            // El backend ya creó la tarea "Misión" del proyecto; eliminamos el
+            // placeholder local para no duplicar la misión en el Kanban.
             try {
-              await updateTask(taskId, { status: 'completed', progress: 100, result: res.final.slice(0, 20000), tokens_used: res.total_tokens ?? 0, provider: effProvider, model: effModel })
               if (orch.backendId) await postAgentStatus(orch.backendId, 'completed', 100).catch(() => undefined)
+              if (!taskId.startsWith('local-')) await apiDeleteTask(taskId).catch(() => undefined)
             } catch {
               /* noop */
             }
-            setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'completed', progress: 100, result: res.final, provider: effProvider, model: effModel } : t)))
+            setTasks((prev) => prev.filter((t) => t.id !== taskId))
             setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, status: 'completed', progress: 100, log: 'entregado ✓' } : a)))
+            // Trae las subtareas reales creadas por el backend (Misión/HTML/CSS/JS/ENTREGA),
+            // ya agrupadas bajo el proyecto, para que aparezcan en el Kanban.
+            void refreshTasksFromBackend()
           } else {
             pushActivity(orch.name, `Delegación falló: ${res.error ?? 'sin respuesta'}`, 'error')
             setChat((prev) => [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `No pude completar la delegación: ${res.error ?? 'sin respuesta del proveedor'}` }].slice(-30))
@@ -606,6 +654,75 @@ export function useLiveOffice() {
     (id: string) => {
       setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'in_progress', progress: Math.max(t.progress, 5) } : t)))
       pushActivity('Tú', 'aprobaste tarea de alto costo (human-in-the-loop) → En progreso', 'success')
+    },
+    [pushActivity],
+  )
+
+  // Relee las tareas del backend y reemplaza las de origen backend en el estado
+  // (conserva las locales que aún no existen en backend). Se usa tras una
+  // delegación para que aparezcan las subtareas reales ya agrupadas por proyecto.
+  const refreshTasksFromBackend = useCallback(async () => {
+    try {
+      const [bAgents, bTasks] = await Promise.all([getAgents(), getTasks()])
+      if (bTasks.length === 0) return
+      knownTasks.current = new Set(bTasks.map((t) => t.id))
+      const mapped: LiveTask[] = bTasks.map((t) => {
+        const an = bAgents.find((x) => x.id === t.agent_id)?.name
+        return {
+          id: t.id,
+          title: t.title,
+          desc: t.description,
+          priority: t.priority,
+          status: t.status,
+          progress: Math.round(t.progress),
+          agentName: an,
+          energy: 50,
+          result: t.result ?? undefined,
+          provider: t.provider ?? undefined,
+          model: t.model ?? undefined,
+          projectId: t.project_id ?? undefined,
+          projectName: t.project_name ?? undefined,
+          projectBrief: t.project_brief ?? undefined,
+          roleLabel: t.role_label ?? undefined,
+        }
+      })
+      setTasks((prev) => {
+        // conserva solo las tareas locales (id local-...) que no estén en backend
+        const locals = prev.filter((t) => t.id.startsWith('local-') && !knownTasks.current.has(t.id))
+        return [...locals, ...mapped]
+      })
+    } catch {
+      /* offline: deja el estado como está */
+    }
+  }, [])
+
+  // Eliminar una tarea (local o backend)
+  const removeTask = useCallback(
+    async (id: string) => {
+      const t = tasks.find((x) => x.id === id)
+      setTasks((prev) => prev.filter((x) => x.id !== id))
+      pushActivity('Tú', `🗑 eliminaste «${t?.title ?? id}»`, 'warning')
+      if (!id.startsWith('local-')) {
+        try {
+          await apiDeleteTask(id)
+        } catch {
+          pushActivity('Sistema', 'no pude eliminar en backend (red): quitada solo local', 'warning')
+        }
+      }
+    },
+    [tasks, pushActivity],
+  )
+
+  // Eliminar un proyecto completo (todas sus subtareas)
+  const removeProject = useCallback(
+    async (projectId: string, projectName?: string) => {
+      setTasks((prev) => prev.filter((x) => x.projectId !== projectId))
+      pushActivity('Tú', `🗑 eliminaste el proyecto «${projectName ?? projectId}» y sus tareas`, 'warning')
+      try {
+        await apiDeleteProjectTasks(projectId)
+      } catch {
+        pushActivity('Sistema', 'no pude eliminar el proyecto en backend (red)', 'warning')
+      }
     },
     [pushActivity],
   )
@@ -983,7 +1100,7 @@ export function useLiveOffice() {
     agents, tasks, docs, activity, chat, stats, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
     saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
-    openDoc, followUpDoc, fatigueOf,
+    openDoc, followUpDoc, fatigueOf, removeTask, removeProject, refreshTasksFromBackend,
     // nuevas capacidades
     selectedAgentId, selectAgent, chattingWith, openAgentChat, closeAgentChat,
     agentChats, agentThinking, sendAgentMessage, clearAgentChat, tasksForAgent,

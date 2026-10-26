@@ -114,6 +114,10 @@ def _ensure_columns(sync_conn) -> None:
         "tasks": {
             "provider": "VARCHAR(60)",
             "model": "VARCHAR(120)",
+            "project_id": "VARCHAR(100)",
+            "project_name": "VARCHAR(160)",
+            "project_brief": "TEXT",
+            "role_label": "VARCHAR(40)",
         },
     }
     try:

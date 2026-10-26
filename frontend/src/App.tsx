@@ -1,6 +1,6 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { NavLink, Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
-import { OfficeScene } from './components/office/OfficeScene'
+import { OfficeScene, type OfficeProject, type OfficeTask } from './components/office/OfficeScene'
 import { StudioPanel } from './components/StudioPanel'
 import { ProvidersSidebar } from './components/ProvidersSidebar'
 import { KanbanBoard } from './components/KanbanBoard'
@@ -47,7 +47,7 @@ export default function App() {
     agents, tasks, docs, chat, backendOk, wsLive, version,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
     saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
-    openDoc, followUpDoc,
+    followUpDoc, removeTask, removeProject,
     selectedAgentId, selectAgent, chattingWith, openAgentChat, closeAgentChat,
     agentChats, agentThinking, sendAgentMessage, clearAgentChat, tasksForAgent,
   } = live
@@ -155,11 +155,11 @@ export default function App() {
                   <OfficeView
                     live={live}
                     onAgentClick={openAgentChat}
-                    onDocClick={(id) => { openDoc(id); setOpenDocId(id) }}
+                    onOpenTask={setOpenTaskId}
                   />
                 }
               />
-              <Route path="/kanban" element={<KanbanBoard tasks={tasks} agents={agents} onApprove={approveTask} onTaskControl={taskControl} onOpenTask={setOpenTaskId} />} />
+              <Route path="/kanban" element={<KanbanBoard tasks={tasks} agents={agents} onApprove={approveTask} onTaskControl={taskControl} onOpenTask={setOpenTaskId} onDeleteTask={removeTask} onDeleteProject={removeProject} />} />
               <Route
                 path="/skills"
                 element={
@@ -190,6 +190,7 @@ export default function App() {
                     onEdit={setEditingId}
                     onRename={renameAgent}
                     onOpenTask={openTaskById}
+                    onDeleteTask={removeTask}
                   />
                 }
               />
@@ -214,6 +215,7 @@ export default function App() {
           onSend={sendAgentMessage}
           onClear={clearAgentChat}
           onOpenTask={openTaskById}
+          onDeleteTask={removeTask}
         />
       )}
 
@@ -254,21 +256,100 @@ export default function App() {
 
 // Vista de oficina + paneles inferiores (feed / fatiga)
 function OfficeView({
-  live, onAgentClick, onDocClick,
+  live, onAgentClick, onOpenTask,
 }: {
   live: ReturnType<typeof useLiveOffice>
   onAgentClick: (id: string) => void
-  onDocClick: (id: string) => void
+  onOpenTask: (id: string) => void
 }) {
-  const { agents, stats, docs, activity, selectedAgentId } = live
+  const { agents, stats, tasks, activity, selectedAgentId, removeProject } = live
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+
+  // Deriva PROYECTOS agrupando las tareas por projectId (vienen del backend).
+  const projects: OfficeProject[] = useMemo(() => {
+    const byId = new Map<string, { name: string; brief?: string; tasks: typeof tasks; names: Set<string> }>()
+    for (const tk of tasks) {
+      if (!tk.projectId) continue
+      let g = byId.get(tk.projectId)
+      if (!g) {
+        g = { name: tk.projectName ?? 'Proyecto', brief: tk.projectBrief, tasks: [], names: new Set<string>() }
+        byId.set(tk.projectId, g)
+      }
+      g.tasks.push(tk)
+      if (tk.agentName) g.names.add(tk.agentName)
+    }
+    // nombres de archivo físico por rol (coinciden con backend/_workspace)
+    const fileFor: Record<string, string> = {
+      HTML: 'boss_html.html', CSS: 'pixel_css.css', JS: 'max_js.js',
+      'CSS+JS': 'max_full.html', 'DISEÑO+JS': 'max_full.html', ENTREGA: 'final.html', MISIÓN: 'brief.md',
+    }
+    return Array.from(byId.entries()).map(([id, g]) => {
+      const total = g.tasks.length
+      const done = g.tasks.filter((x) => x.status === 'completed').length
+      const progress = total ? Math.round(g.tasks.reduce((s, x) => s + x.progress, 0) / total) : 0
+      // activo si alguna tarea no está completada/fallida
+      const active = g.tasks.some((x) => !['completed', 'failed'].includes(x.status))
+      const hasDeliverable = g.tasks.some((x) => !!x.result)
+      const files = Array.from(new Set(g.tasks.map((x) => fileFor[x.roleLabel ?? ''] ).filter(Boolean))) as string[]
+      return { id, name: g.name, brief: g.brief, total, done, progress, active, agentNames: Array.from(g.names), hasDeliverable, files }
+    })
+  }, [tasks])
+
+  // Tareas en forma mínima para el drilldown del escritorio.
+  const officeTasks: OfficeTask[] = useMemo(
+    () => tasks.map((tk) => ({
+      id: tk.id, title: tk.title, status: tk.status, progress: tk.progress,
+      roleLabel: tk.roleLabel, projectName: tk.projectName, agentName: tk.agentName,
+    })),
+    [tasks],
+  )
+
   return (
     <>
       <OfficeScene
         agents={agents}
         stats={stats}
         onAgentClick={onAgentClick}
-        docs={docs}
-        onDocClick={onDocClick}
+        projects={projects}
+        tasks={officeTasks}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={(id) => {
+          setSelectedProjectId(id)
+          if (!id) return
+          // Al tocar un proyecto, abre su entregable/tarea representativa en el drawer:
+          // prioriza ENTREGA (el archivo ensamblado), luego MISIÓN, luego cualquiera.
+          const pts = tasks.filter((t) => t.projectId === id)
+          const rep = pts.find((t) => t.roleLabel === 'ENTREGA')
+            ?? pts.find((t) => t.roleLabel === 'MISIÓN')
+            ?? pts[0]
+          if (rep) onOpenTask(rep.id)
+        }}
+        onDeleteProject={(id, name) => {
+          if (window.confirm(`¿Eliminar el proyecto «${name ?? id}» y todas sus tareas?`)) {
+            removeProject(id, name)
+            setSelectedProjectId((cur) => (cur === id ? null : cur))
+          }
+        }}
+        onDownloadProject={(id, name) => {
+          // Busca el entregable del proyecto: prioriza ENTREGA, luego MISIÓN, luego cualquiera con result.
+          const projTasks = tasks.filter((t) => t.projectId === id && t.result)
+          const entrega = projTasks.find((t) => t.roleLabel === 'ENTREGA')
+            ?? projTasks.find((t) => t.roleLabel === 'MISIÓN')
+            ?? projTasks[0]
+          if (!entrega || !entrega.result) {
+            window.alert('Este proyecto no tiene un entregable descargable todavía.')
+            return
+          }
+          const code = entrega.result
+          const slug = (name || 'entregable').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'entregable'
+          const ext = /<html|<!doctype/i.test(code) ? 'html' : 'txt'
+          const blob = new Blob([code], { type: `${ext === 'html' ? 'text/html' : 'text/plain'};charset=utf-8` })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = `${slug}.${ext}`
+          document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+        }}
+        onOpenTask={onOpenTask}
         selectedId={selectedAgentId}
       />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>

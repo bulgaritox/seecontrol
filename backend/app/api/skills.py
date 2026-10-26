@@ -5,12 +5,15 @@ Handles CRUD operations for skills
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy import or_, and_, desc
 from typing import List, Optional
 from datetime import datetime
 import logging
+import re
+import httpx
 
 from ..models.skill import Skill, SkillCategory
 from ..models.user import User
@@ -139,6 +142,132 @@ async def list_skills(
         page=page,
         page_size=page_size,
     )
+
+
+# ============================================
+# IMPORT SKILL FROM URL (GitHub SKILL.md) — server-side, sin CORS
+# IMPORTANTE: debe ir ANTES de las rutas /{skill_id} para que POST /import
+# no quede capturado por el patrón /{skill_id} (que devolvería 405).
+# ============================================
+
+class SkillImportRequest(BaseModel):
+    """URL a un SKILL.md o a la carpeta de la skill en GitHub."""
+    url: str
+
+
+def _normalize_skill_url(url: str) -> List[str]:
+    """Convierte una URL de GitHub (blob/tree/raw o carpeta) en una lista de
+    URLs raw candidatas a SKILL.md. Devuelve varias para intentar en orden."""
+    u = url.strip()
+    candidates: List[str] = []
+
+    # github.com/<owner>/<repo>/blob/<branch>/<path>  -> raw
+    m = re.match(r"https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)", u)
+    if m:
+        owner, repo, branch, path = m.groups()
+        raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+        candidates.append(raw)
+        if not path.lower().endswith(".md"):
+            candidates.append(raw.rstrip("/") + "/SKILL.md")
+        return candidates
+
+    # github.com/<owner>/<repo>/tree/<branch>/<path>  (carpeta) -> raw .../SKILL.md
+    m = re.match(r"https?://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)", u)
+    if m:
+        owner, repo, branch, path = m.groups()
+        base = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path.rstrip('/')}"
+        candidates.append(base + "/SKILL.md")
+        candidates.append(base + "/skill.md")
+        return candidates
+
+    # Ya es raw.githubusercontent.com
+    if "raw.githubusercontent.com" in u:
+        candidates.append(u)
+        if not u.lower().endswith(".md"):
+            candidates.append(u.rstrip("/") + "/SKILL.md")
+        return candidates
+
+    # Cualquier otra URL: úsala tal cual, y si no es .md prueba /SKILL.md
+    candidates.append(u)
+    if not u.lower().endswith(".md"):
+        candidates.append(u.rstrip("/") + "/SKILL.md")
+    return candidates
+
+
+def _parse_skill_md(raw: str, source_url: str) -> dict:
+    """Parsea un SKILL.md (frontmatter YAML simple + cuerpo markdown)."""
+    front, body = "", raw
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", raw, re.DOTALL)
+    if m:
+        front, body = m.group(1), m.group(2)
+    meta: dict = {}
+    for line in front.split("\n"):
+        i = line.find(":")
+        if i > 0:
+            k = line[:i].strip().lower()
+            v = line[i + 1:].strip().strip("'\"")
+            meta[k] = v
+    seg = [p for p in source_url.split("/") if p and p.lower() not in ("skill.md",)]
+    folder = seg[-1] if seg else "skill"
+    raw_name = meta.get("name") or folder or "skill-importada"
+    name = re.sub(r"[^A-Za-z0-9_.-]", "_", raw_name)
+    blob = f"{meta.get('description', '')}\n{body}".lower()
+    # Diseño primero: muchas skills de diseño mencionan "code"/"review" de pasada.
+    design_hits = len(re.findall(r"design|dise[ñn]|aesthetic|ui/ux|\bui\b|\bux\b|visual|color|palette|typograph|tipograf|layout|theme|neon|spacing|tokens?|frontend|front-end", blob))
+    code_hits = len(re.findall(r"\btest\b|tdd|commit|\bpr\b|refactor|endpoint|backend", blob))
+    if design_hits >= 2 and design_hits >= code_hits:
+        cat = "image"
+    elif code_hits >= 2:
+        cat = "code"
+    elif re.search(r"seo|blog|writ|redact|copy", blob):
+        cat = "writing"
+    elif re.search(r"sql|data|migrat", blob):
+        cat = "data"
+    elif re.search(r"search|research|investig|benchmark", blob):
+        cat = "research"
+    elif re.search(r"video", blob):
+        cat = "video"
+    else:
+        cat = "general"
+    description = meta.get("description") or next(
+        (l.strip() for l in body.split("\n") if len(l.strip()) > 20), "Skill importada."
+    )[:300]
+    return {
+        "name": name if name.lower().startswith("skill") else f"Skill_{name}",
+        "description": description,
+        "category": cat,
+        "instructions": body.strip()[:8000] or "Ver fuente original.",
+        "author": meta.get("author") or "GitHub-Import",
+        "tags": ["importada", "github"],
+        "source_url": source_url,
+    }
+
+
+@router.post("/import", response_model=dict)
+async def import_skill(
+    payload: SkillImportRequest,
+    token: str = Depends(oauth2_scheme),
+):
+    """Descarga un SKILL.md desde GitHub (server-side, evita CORS) y lo parsea.
+    Acepta enlaces blob/tree/raw o a la carpeta de la skill."""
+    if not auth_service.verify_token(token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    candidates = _normalize_skill_url(payload.url)
+    last_err = ""
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        for cand in candidates:
+            try:
+                r = await client.get(cand, headers={"User-Agent": "SeeControl-SkillImporter"})
+                if r.status_code == 200 and r.text.strip():
+                    parsed = _parse_skill_md(r.text, cand)
+                    parsed["resolved_url"] = cand
+                    return {"ok": True, "skill": parsed}
+                last_err = f"HTTP {r.status_code} en {cand}"
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                continue
+    return {"ok": False, "error": last_err or "No se pudo descargar el SKILL.md", "tried": candidates}
 
 
 # ============================================
@@ -578,3 +707,7 @@ async def download_skill(
         tags=new_skill.tags,
         display_name=new_skill.display_name,
     )
+
+
+# (El endpoint de importación vive ARRIBA, antes de las rutas /{skill_id},
+#  para que POST /import no choque con /{skill_id} y devuelva 405.)

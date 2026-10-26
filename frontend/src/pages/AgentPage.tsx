@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { LiveAgent, LiveTask, AgentChatMsg } from '../hooks/useLiveOffice'
 import { AgentSprite } from '../components/office/AgentSprite'
@@ -19,6 +19,7 @@ interface Props {
   onEdit: (id: string) => void
   onRename: (id: string, name: string) => void
   onOpenTask: (taskId: string) => void
+  onDeleteTask?: (taskId: string) => void
 }
 
 /**
@@ -27,7 +28,7 @@ interface Props {
  * seleccionar como agente activo, abrir editor completo).
  */
 export function AgentPage({
-  agents, messagesFor, thinkingId, tasksForAgent, onSend, onClear, onSelect, selectedId, onEdit, onRename, onOpenTask,
+  agents, messagesFor, thinkingId, tasksForAgent, onSend, onClear, onSelect, selectedId, onEdit, onRename, onOpenTask, onDeleteTask,
 }: Props) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -39,6 +40,23 @@ export function AgentPage({
 
   const messages = agent ? messagesFor(agent.id) : []
   const thinking = thinkingId === agent?.id
+
+  // Tareas del agente agrupadas por proyecto (hook arriba para no romper reglas de hooks)
+  const agentTasks = agent ? tasksForAgent(agent.name) : []
+  const projectGroups = useMemo(() => {
+    const NO_PROJECT = '__sin_proyecto__'
+    const map = new Map<string, { id: string; name: string; brief?: string; tasks: LiveTask[] }>()
+    for (const t of agentTasks) {
+      const key = t.projectId ?? NO_PROJECT
+      if (!map.has(key)) {
+        map.set(key, { id: key, name: t.projectName ?? (key === NO_PROJECT ? 'Tareas sueltas' : 'Proyecto'), brief: t.projectBrief, tasks: [] })
+      }
+      const g = map.get(key)!
+      if (!g.brief && t.projectBrief) g.brief = t.projectBrief
+      g.tasks.push(t)
+    }
+    return Array.from(map.values()).sort((a, b) => (a.id === NO_PROJECT ? 1 : b.id === NO_PROJECT ? -1 : 0))
+  }, [agentTasks])
 
   useEffect(() => {
     if (agent) onSelect(agent.id)
@@ -167,26 +185,46 @@ export function AgentPage({
           </section>
 
           <section style={{ background: '#111', border: '1px solid #2A2A2A', borderRadius: 14, padding: 14 }}>
-            <div style={{ fontSize: 11, fontFamily: GB, color: '#78716C', marginBottom: 10 }}>🗂 HISTORIAL DE TAREAS ASIGNADAS ({tasks.length})</div>
+            <div style={{ fontSize: 11, fontFamily: GB, color: '#78716C', marginBottom: 10 }}>🗂 PROYECTOS Y TAREAS DE {agent.name.toUpperCase()} ({tasks.length})</div>
             {tasks.length === 0 ? (
               <div style={{ color: '#57534E', fontSize: 12 }}>El orquestador aún no le ha asignado tareas a {agent.name}.</div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-                {tasks.map((t) => {
-                  const done = t.status === 'completed'
-                  const col = done ? '#22C55E' : t.status === 'blocked' ? '#EF4444' : t.status === 'paused' ? '#F59E0B' : '#38BDF8'
-                  return (
-                    <button key={t.id} onClick={() => onOpenTask(t.id)} style={{ textAlign: 'left', background: '#161616', border: '1px solid #2A2A2A', borderLeft: `3px solid ${col}`, borderRadius: 8, padding: 10, cursor: 'pointer', color: '#fff' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
-                        <span style={{ fontSize: 9, color: col, textTransform: 'uppercase', flexShrink: 0 }}>{t.status}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {projectGroups.map((g) => (
+                  <div key={g.id} style={{ background: '#0F0F0F', border: '1px solid #262626', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 12px', background: 'linear-gradient(90deg,#1E1B4B,#0F0F0F)', borderBottom: '1px solid #312E81' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 'bold', color: '#C7D2FE' }}>📁 {g.name}</span>
+                        <span style={{ fontSize: 10, color: '#818CF8', background: '#1E1B4B', border: '1px solid #312E81', borderRadius: 10, padding: '1px 8px' }}>{g.tasks.length}</span>
                       </div>
-                      <div style={{ height: 5, background: '#2A2A2A', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
-                        <div style={{ width: `${t.progress}%`, height: '100%', background: col }} />
-                      </div>
-                    </button>
-                  )
-                })}
+                      {g.brief && <div title={g.brief} style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 3 }}>📋 {g.brief}</div>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, padding: 10 }}>
+                      {g.tasks.map((t) => {
+                        const done = t.status === 'completed'
+                        const col = done ? '#22C55E' : t.status === 'blocked' ? '#EF4444' : t.status === 'paused' ? '#F59E0B' : '#38BDF8'
+                        return (
+                          <div key={t.id} style={{ background: '#161616', border: '1px solid #2A2A2A', borderLeft: `3px solid ${col}`, borderRadius: 8, padding: 10, color: '#fff' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>
+                              <button onClick={() => onOpenTask(t.id)} style={{ flex: 1, textAlign: 'left', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, minWidth: 0, display: 'flex', gap: 6, alignItems: 'center' }}>
+                                {t.roleLabel && <span style={{ fontSize: 8, fontWeight: 'bold', color: '#FDE68A', background: '#422006', border: '1px solid #854D0E', borderRadius: 4, padding: '0 5px', flexShrink: 0 }}>{t.roleLabel}</span>}
+                                <span style={{ fontSize: 12.5, fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                              </button>
+                              <span style={{ fontSize: 9, color: col, textTransform: 'uppercase', flexShrink: 0 }}>{t.status}</span>
+                              {onDeleteTask && (
+                                <button onClick={() => { if (window.confirm(`¿Eliminar «${t.title}»?`)) onDeleteTask(t.id) }} title="Eliminar tarea" style={{ fontSize: 11, background: '#2A1212', color: '#F87171', border: '1px solid #7F1D1D', borderRadius: 5, padding: '1px 6px', cursor: 'pointer', flexShrink: 0 }}>🗑</button>
+                              )}
+                            </div>
+                            {t.model && <div style={{ fontSize: 9, color: '#C4B5FD', marginTop: 3 }}>🧠 {t.provider ? `${t.provider}/` : ''}{t.model}</div>}
+                            <div style={{ height: 5, background: '#2A2A2A', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
+                              <div style={{ width: `${t.progress}%`, height: '100%', background: col }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>

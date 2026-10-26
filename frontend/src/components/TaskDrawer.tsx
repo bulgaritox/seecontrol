@@ -74,12 +74,33 @@ export function TaskDrawer({ task, agent, onClose, onControl, onExtend }: Props)
           </div>
         )}
         <div style={{ fontSize: 11, color: '#A8A29E', marginTop: 6, whiteSpace: 'pre-wrap' }}>{task.desc}</div>
-        {task.result && (
-          <div style={{ marginTop: 8, background: '#FFFBEB', border: '2px solid #F59E0B', borderRadius: 8, padding: 10 }}>
-            <div style={{ fontSize: 10, fontFamily: GB, color: '#92400E', marginBottom: 4 }}>📄 ENTREGABLE EN LA MESA</div>
-            <div style={{ fontSize: 12, color: '#1F2937', whiteSpace: 'pre-wrap', maxHeight: 180, overflowY: 'auto' }}>{task.result}</div>
-          </div>
-        )}
+        {task.result && (() => {
+          const result = task.result
+          const looksCode = /<html|<!doctype|function|const |=>|{|}|;/i.test(result)
+          const roleExt: Record<string, string> = { CSS: 'css', JS: 'js', HTML: 'html', 'DISEÑO+JS': 'html', 'CSS+JS': 'html', ENTREGA: 'html', MISIÓN: 'html' }
+          const ext = roleExt[task.roleLabel ?? ''] ?? (/<html|<!doctype/i.test(result) ? 'html' : 'txt')
+          const slug = (task.projectName || task.title || 'entregable').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'entregable'
+          const fname = `${slug}${task.roleLabel && task.roleLabel !== 'ENTREGA' && task.roleLabel !== 'MISIÓN' ? '-' + task.roleLabel.toLowerCase() : ''}.${ext}`
+          const dl = () => {
+            const blob = new Blob([result], { type: `${ext === 'html' ? 'text/html' : 'text/plain'};charset=utf-8` })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = fname
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+          }
+          return (
+            <div style={{ marginTop: 8, background: '#0F172A', border: '1px solid #1E293B', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#111827', borderBottom: '1px solid #1E293B' }}>
+                <span style={{ fontSize: 10, fontFamily: GB, color: '#A5B4FC' }}>📄 ENTREGABLE{task.roleLabel ? ` · ${task.roleLabel}` : ''}</span>
+                <button onClick={dl} title={`Descargar ${fname}`} style={{ fontSize: 10, fontFamily: MONO, fontWeight: 'bold', background: '#16A34A', color: '#fff', border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>⬇ {fname}</button>
+              </div>
+              {looksCode ? (
+                <pre style={{ margin: 0, padding: 10, fontSize: 11, lineHeight: 1.45, color: '#E2E8F0', fontFamily: MONO, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 220, overflowY: 'auto' }}><code>{result}</code></pre>
+              ) : (
+                <div style={{ fontSize: 12, color: '#E2E8F0', whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto', padding: 10 }}>{result}</div>
+              )}
+            </div>
+          )
+        })()}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 11, color: '#78716C' }}>
           <span style={{ textTransform: 'uppercase' }}>{task.priority}</span>
           <span>·</span>

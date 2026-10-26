@@ -13,6 +13,34 @@ const MONO = "ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace"
 export function DocViewer({ doc, onClose, onFollowUp }: Props) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const isCode = !!doc.code && /<html|<!doctype|function|const |=>|{|}/i.test(doc.code)
+
+  const download = () => {
+    const content = doc.code ?? doc.full
+    const name = doc.filename ?? 'entregable.txt'
+    const type = name.endsWith('.html') ? 'text/html' : 'text/plain'
+    const blob = new Blob([content], { type: `${type};charset=utf-8` })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(doc.code ?? doc.full)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* noop */
+    }
+  }
 
   const send = async () => {
     const clean = input.trim()
@@ -37,11 +65,35 @@ export function DocViewer({ doc, onClose, onFollowUp }: Props) {
               {doc.agentName} · {doc.time} · pregunta: “{doc.question.slice(0, 90)}{doc.question.length > 90 ? '…' : ''}”
             </div>
           </div>
+          {doc.code && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={copy} title="Copiar código" style={{ background: '#E7E2D5', color: '#111', border: '1px solid #D6D0BF', borderRadius: 6, cursor: 'pointer', padding: '4px 10px', fontSize: 11, fontFamily: MONO }}>
+                {copied ? '✓ copiado' : '📋 copiar'}
+              </button>
+              <button onClick={download} title={`Descargar ${doc.filename}`} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 10px', fontSize: 11, fontFamily: MONO, fontWeight: 'bold' }}>
+                ⬇ {doc.filename}
+              </button>
+            </div>
+          )}
           <button onClick={onClose} style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 10px' }}>✕</button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-          {doc.full}
-        </div>
+        {isCode ? (
+          <div style={{ flex: 1, overflowY: 'auto', background: '#0F172A' }}>
+            <pre style={{ margin: 0, padding: 16, fontSize: 12, lineHeight: 1.5, color: '#E2E8F0', fontFamily: MONO, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              <code>{doc.code}</code>
+            </pre>
+            {doc.artifacts && doc.artifacts.length > 0 && (
+              <div style={{ padding: '10px 16px', borderTop: '1px solid #1E293B', color: '#94A3B8', fontSize: 11 }}>
+                <div style={{ color: '#C7D2FE', marginBottom: 4 }}>📁 Artefactos del proyecto ({doc.workspaceDir}):</div>
+                {doc.artifacts.map((a) => <div key={a}>• {a}</div>)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            {doc.full}
+          </div>
+        )}
         <div style={{ padding: 12, borderTop: '2px dashed #E5E0D5', background: '#F5F0DF' }}>
           <div style={{ fontSize: 11, color: '#78716C', marginBottom: 6 }}>🧵 Continúa el hilo — se anexa a esta hoja:</div>
           <div style={{ display: 'flex', gap: 6 }}>

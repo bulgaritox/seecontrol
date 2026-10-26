@@ -30,6 +30,10 @@ export interface BackendTask {
   agent_id?: string | null
   provider?: string | null
   model?: string | null
+  project_id?: string | null
+  project_name?: string | null
+  project_brief?: string | null
+  role_label?: string | null
   result?: string | null
 }
 
@@ -224,6 +228,16 @@ export interface OrchestrateResult {
   override?: boolean
   provider?: string
   model?: string
+  project_id?: string
+  project_name?: string
+  project_brief?: string
+  agent_cap?: number
+  tailwind?: boolean
+  delegated?: string[]
+  artifacts?: string[]
+  workspace_dir?: string
+  partial?: boolean
+  partial_error?: string
   error?: string
 }
 
@@ -385,6 +399,21 @@ export async function createSkill(payload: Record<string, unknown>): Promise<voi
   await req('POST', '/api/skills/', payload)
 }
 
+export interface ImportedSkill {
+  name: string
+  description: string
+  category: string
+  instructions: string
+  author: string
+  tags: string[]
+  source_url?: string
+  resolved_url?: string
+}
+
+export async function importSkillFromUrl(url: string): Promise<{ ok: boolean; skill?: ImportedSkill; error?: string; tried?: string[] }> {
+  return req<{ ok: boolean; skill?: ImportedSkill; error?: string; tried?: string[] }>('POST', '/api/skills/import', { url })
+}
+
 export async function deleteSkill(id: string): Promise<void> {
   await req('DELETE', `/api/skills/${id}`)
 }
@@ -398,12 +427,24 @@ export interface TaskPatch {
   agent_id?: string | null
   provider?: string
   model?: string
+  project_id?: string
+  project_name?: string
+  project_brief?: string
+  role_label?: string
   result?: string
   tokens_used?: number
 }
 
 export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
   await req('PUT', `/api/tasks/${id}`, patch)
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  await req('DELETE', `/api/tasks/${id}`)
+}
+
+export async function deleteProjectTasks(projectId: string): Promise<{ deleted: number; project_id: string }> {
+  return req<{ deleted: number; project_id: string }>('DELETE', `/api/tasks/project/${projectId}`)
 }
 
 export function connectOfficeWS(onMessage: (msg: Record<string, unknown>) => void): () => void {

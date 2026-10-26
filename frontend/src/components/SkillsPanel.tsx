@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ensureAuth, getSkills, updateSkill, createSkill, deleteSkill, type BackendSkill } from '../api'
+import { ensureAuth, getSkills, updateSkill, createSkill, deleteSkill, importSkillFromUrl, type BackendSkill } from '../api'
 import type { LiveAgent } from '../hooks/useLiveOffice'
 
 interface Props {
@@ -139,22 +139,26 @@ export function SkillsPanel({ agents, onAttachSkill, refreshToken, onChanged }: 
   }
 
   const doImport = async () => {
-    setImportMsg('⏳ descargando…')
+    const url = importUrl.trim()
+    if (!url) { setImportMsg('⚠ pega una URL de GitHub (SKILL.md o la carpeta de la skill)'); return }
+    setImportMsg('⏳ descargando desde el backend…')
     try {
-      const res = await fetch(importUrl.trim())
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const parsed = parseSkillMd(await res.text(), importUrl.trim())
-      if (!parsed) throw new Error('no se pudo parsear')
+      // El backend descarga (sin CORS) y normaliza enlaces blob/tree/raw de GitHub.
+      const res = await importSkillFromUrl(url)
+      if (!res.ok || !res.skill) {
+        throw new Error(res.error || 'no se pudo descargar/parsear')
+      }
+      const s = res.skill
       setForm((f) => ({
         ...f,
-        name: String(parsed.name ?? f.name),
-        description: String(parsed.description ?? f.description),
-        category: String(parsed.category ?? f.category),
-        instructions: String(parsed.instructions ?? f.instructions),
-        author: String(parsed.author ?? f.author),
-        tags: ['importada', 'agent-skills'].join(', '),
+        name: s.name || f.name,
+        description: s.description || f.description,
+        category: s.category || f.category,
+        instructions: s.instructions || f.instructions,
+        author: s.author || f.author,
+        tags: (s.tags ?? ['importada', 'github']).join(', '),
       }))
-      setImportMsg('✓ importado — revisa y guarda')
+      setImportMsg(`✓ importado desde ${s.resolved_url ? s.resolved_url.split('/').slice(-2).join('/') : 'GitHub'} — revisa y guarda`)
     } catch (e) {
       setImportMsg(`❌ ${e instanceof Error ? e.message : 'error'}`)
     }
@@ -238,10 +242,12 @@ export function SkillsPanel({ agents, onAttachSkill, refreshToken, onChanged }: 
             {creating && (
               <div style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: 10, marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: '#A8A29E', marginBottom: 6 }}>
-                  Importar SKILL.md por URL (p. ej. <span style={{ color: '#38BDF8' }}>https://raw.githubusercontent.com/…/SKILL.md</span> de obra/superpowers o addyosmani/agent-skills):
+                  Importar SKILL.md desde GitHub. Pega el enlace al archivo o a la carpeta de la skill:
+                  <br /><span style={{ color: '#38BDF8' }}>.../blob/main/skills/cosmic/SKILL.md</span>{' '}
+                  o <span style={{ color: '#38BDF8' }}>.../tree/main/skills/cosmic</span> (el backend lo resuelve).
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://raw.githubusercontent.com/…" style={{ ...inputStyle, flex: 1 }} />
+                  <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://github.com/owner/repo/tree/main/skills/cosmic" style={{ ...inputStyle, flex: 1 }} />
                   <button onClick={doImport} style={{ fontSize: 11, fontFamily: MONO, background: '#1E3A8A', color: '#fff', border: 'none', borderRadius: 6, padding: '0 12px', cursor: 'pointer' }}>↓ Importar</button>
                 </div>
                 {importMsg && <div style={{ fontSize: 11, color: '#FBBF24', marginTop: 6 }}>{importMsg}</div>}
