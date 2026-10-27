@@ -3,6 +3,7 @@ import { ROSTER, CHATTER, ACTIVITY_TPL, fatigueOf } from '../data/demo'
 import {
   ensureAuth, getAgents, getTasks, createTask, updateAgent, updateTask, postAgentStatus,
   createAgent, deleteAgent, pingAgent, orchestrateCode, connectOfficeWS, getHealth,
+  getProviders,
   deleteTask as apiDeleteTask, deleteProjectTasks as apiDeleteProjectTasks,
   type AgentPatch, type AgentMood,
 } from '../api'
@@ -170,6 +171,8 @@ export function useLiveOffice() {
   const [backendOk, setBackendOk] = useState(false)
   const [wsLive, setWsLive] = useState(false)
   const [version, setVersion] = useState('1.0.0')
+  // Proveedores reales listos (BYOK/backend). Cuando hay ≥1, se oculta DEMO y se opera en PROD.
+  const [providersReady, setProvidersReady] = useState(false)
   // Agente seleccionado (el que estoy usando ahora mismo) + conversaciones directas
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(() => localStorage.getItem('sc_selected') || null)
   const [agentChats, setAgentChats] = useState<Record<string, AgentChatMsg[]>>(() => {
@@ -242,6 +245,37 @@ export function useLiveOffice() {
     localStorage.setItem('sc_mode', m)
     setModeState(m)
   }, [])
+
+  // --- Detección de proveedores reales: si hay ≥1 habilitado, operamos en PROD ---
+  // Esto apaga el modo DEMO automáticamente (el usuario ya no tiene que elegir):
+  // en cuanto el backend reporta un proveedor con credencial, los agentes son reales.
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const provs = await getProviders()
+        const anyEnabled = provs.some((p) => p.enabled)
+        if (cancelled) return
+        setProvidersReady(anyEnabled)
+        if (anyEnabled) {
+          // forzar PROD una sola vez al detectar proveedor
+          setModeState((m) => {
+            if (m !== 'prod') {
+              try { localStorage.setItem('sc_mode', 'prod') } catch { /* noop */ }
+              return 'prod'
+            }
+            return m
+          })
+        }
+      } catch {
+        /* backend offline: seguimos como estábamos */
+      }
+    }
+    void check()
+    // reintenta mientras no haya proveedores (hasta que el backend responda)
+    const iv = window.setInterval(() => { if (!providersReady) void check() }, 6000)
+    return () => { cancelled = true; window.clearInterval(iv) }
+  }, [providersReady])
 
   const applyLooks = useCallback((list: LiveAgent[]) => {
     const looks = loadLooks()
@@ -335,6 +369,9 @@ export function useLiveOffice() {
             prev.map((a) => {
               const match = bAgents.find((b) => b.name.toLowerCase() === a.name.toLowerCase())
               if (!match) return a
+              // No pisar a un agente que el usuario acaba de poner a ejecutar
+              // (trip activo): evita el parpadeo "da vueltas" mientras corre sendChat.
+              if (a.trip === 'table') return a
               const prevSt = prevStatus.current[a.id]
               if (prevSt !== undefined && prevSt !== match.status) {
                 pushActivity(a.name, `${a.name} pasó a ${match.status}`, match.status === 'blocked' ? 'error' : 'info')
@@ -475,21 +512,45 @@ export function useLiveOffice() {
       if (!clean) return
       const title = clean.slice(0, 60)
       setChat((prev) => [...prev, { id: seq++, from: 'Tú', text: clean, mine: true }].slice(-30))
-      // Orquestador: Boss activo, si no el primer agente encendido
-      const orch = agents.find((a) => a.is_active && a.character === 'boss') ?? agents.find((a) => a.is_active)
+
+      // ¿El usuario nombró a un agente concreto? ("@scout", "dile a scout", "que scout…").
+      // Si es así, ESE agente ejecuta la tarea él mismo (no se fuerza la delegación Pixel/Max).
+      const activeAgents = agents.filter((a) => a.is_active)
+      const mentioned = activeAgents.find((a) => {
+        const n = a.name.toLowerCase()
+        if (a.character === 'boss') return false // al Boss se le pide por defecto, no cuenta como "delegar a X"
+        const re = new RegExp(`(^|[^a-z])@?${n}([^a-z]|$)`, 'i')
+        return re.test(clean)
+      })
+
+      // Orquestador efectivo: el agente nombrado, o Boss, o el primero encendido.
+      const orch = mentioned
+        ?? agents.find((a) => a.is_active && a.character === 'boss')
+        ?? agents.find((a) => a.is_active)
       if (!orch) {
         pushActivity('Sistema', 'no hay agentes encendidos: enciende al menos uno en Studio ⏻', 'error')
         return
       }
-      // Modelo efectivo: el elegido en Studio se impone al del boss
+      // Modelo efectivo: el elegido en Studio se impone; si no, el del ejecutor
       const effProvider = override?.provider ?? orch.provider
       const effModel = override?.model ?? orch.model
       pushActivity('Tú', `inyectaste requerimiento: «${clean}»`, 'warning')
+      if (mentioned) {
+        pushActivity('Tú', `→ delegado directamente a ${mentioned.name} (${mentioned.role})`, 'info')
+      }
 
-      // ¿Es una petición de generación de código/sitio? Si lo es, boss DELEGA de verdad
-      // y el BACKEND crea las tareas reales del proyecto (Misión/HTML/CSS/JS/ENTREGA).
-      // Para no dejar una tarea "suelta" duplicada, en ese caso NO creamos placeholder.
-      const isCode = /\b(c[óo]digo|html|css|js|javascript|script|crud|componente|app|función|funcion|programa|snippet|kanban|formulario|p[áa]gina|web|sitio|landing|tailwind|responsive|dashboard|portal|servicios?|front\s?end|frontend|ui|interfaz)\b/i.test(clean)
+      // Intención de INVESTIGACIÓN/ANÁLISIS: tiene prioridad sobre "código".
+      // Evita que "compara servicios de backend" dispare el flujo HTML/CSS/JS.
+      const isResearch = /\b(investig\w*|compar\w*|an[áa]lisis|analiz\w*|research|pros?\s*y\s*contras?|ventajas?|desventajas?|opciones?|recomend\w*|eval[úu]\w*|estudi\w*|resum\w*|explica\w*|documenta\w*|tabla\s+comparativa|qu[ée]\s+es\s+mejor|cu[áa]l\s+es\s+mejor|mejor\s+(usar|para|opci[óo]n))\b/i.test(clean)
+
+      // ¿Generación de código/sitio? Solo si NO es investigación y NO se delegó a un
+      // agente no-desarrollador. El flujo de código (Pixel+Max) requiere al Boss.
+      const codeNouns = /\b(c[óo]digo|html|css|javascript|\bjs\b|script|crud|componente|función|funcion|snippet|kanban|formulario|p[áa]gina\s+web|landing|tailwind|dashboard|maqueta|prototipo|frontend|front\s?end|interfaz)\b/i.test(clean)
+      const codeVerb = /\b(crea|genera|constru\w*|maqueta|programa|desarrolla|hazme|h[áa]zme|dise[ñn]a)\b/i.test(clean)
+      // Es código solo si: menciona algo claramente de front-end Y (hay verbo de crear) Y no es investigación,
+      // y el ejecutor es el Boss (la delegación Pixel/Max solo la hace el Boss).
+      const isBoss = orch.character === 'boss'
+      const isCode = isBoss && !isResearch && codeNouns && (codeVerb || /\blanding\b/i.test(clean))
 
       let taskId = `local-${seq}`
       if (!isCode) {
@@ -621,7 +682,7 @@ export function useLiveOffice() {
             }
             setDocs((prev) => [doc, ...prev].slice(0, 12))
             setChat((prev) =>
-              [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `Listo ✅ Dejé la hoja en la mesa de juntas — tócala para seguir el hilo. (${res.tokens ?? '?'} tok · ${res.model})` }].slice(-30),
+              [...prev, { id: seq++, from: orch.name, role: orch.role, text: `Listo ✅ Dejé la hoja en la mesa de juntas — tócala para seguir el hilo. (${res.tokens ?? '?'} tok · ${res.model})` }].slice(-30),
             )
             pushActivity(orch.name, `${orch.name} entregó documento en la mesa 📄 (${res.tokens ?? '?'} tok)`, 'success')
             try {
@@ -638,8 +699,11 @@ export function useLiveOffice() {
             pushActivity(orch.name, `${res.mood.headline}`, 'warning')
           }
         }
-      } catch {
-        pushActivity(orch.name, `${orch.name} no pudo ejecutar (red local)`, 'error')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        pushActivity(orch.name, `${orch.name} no pudo ejecutar: ${msg.slice(0, 160)}`, 'error')
+        setChat((prev) => [...prev, { id: seq++, from: orch.name, role: 'Orquestador', text: `No pude completar la tarea: ${msg.slice(0, 200)}` }].slice(-30))
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'blocked' } : t)))
       } finally {
         window.setTimeout(() => {
           setAgents((prev) => prev.map((a) => (a.id === orch.id ? { ...a, trip: null } : a)))
@@ -695,6 +759,26 @@ export function useLiveOffice() {
       /* offline: deja el estado como está */
     }
   }, [])
+
+  // --- Polling ligero de TAREAS/PROYECTOS reales también en modo demo ---
+  // En demo la simulación anima a los agentes, pero los PROYECTOS (tareas con
+  // projectId creadas por la delegación del Boss) viven en el backend. Sin este
+  // refresco, proyectos y entregables no aparecerían en la oficina hasta recargar.
+  useEffect(() => {
+    if (!backendOk) return
+    // En PROD ya hay un polling de producción que trae agentes + tareas; no
+    // dupliquemos (evita refrescos solapados y parpadeo "da vueltas").
+    if (mode === 'prod') return
+    let cancelled = false
+    const iv = window.setInterval(() => {
+      if (!cancelled) void refreshTasksFromBackend()
+    }, 6000)
+    void refreshTasksFromBackend()
+    return () => {
+      cancelled = true
+      window.clearInterval(iv)
+    }
+  }, [backendOk, mode, refreshTasksFromBackend])
 
   // Eliminar una tarea (local o backend)
   const removeTask = useCallback(
@@ -1097,7 +1181,7 @@ export function useLiveOffice() {
   )
 
   return {
-    agents, tasks, docs, activity, chat, stats, backendOk, wsLive, version,
+    agents, tasks, docs, activity, chat, stats, backendOk, wsLive, version, providersReady,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
     saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
     openDoc, followUpDoc, fatigueOf, removeTask, removeProject, refreshTasksFromBackend,

@@ -1,4 +1,5 @@
 # SeeControl - Setup Local
+# SeeControl - Setup Local
 
 Plataforma de orquestación multi-agente con oficina virtual pixel-art estilo GameBoy Pokémon.
 
@@ -6,29 +7,69 @@ Plataforma de orquestación multi-agente con oficina virtual pixel-art estilo Ga
 > Explica dónde vive cada cosa y **qué archivos tocar juntos** al ajustar el backend
 > (proveedores LLM, agentes del ROSTER, modelo de datos, endpoints, WebSocket).
 
+---
+
+## ⚡ Reactivar el proyecto (ya instalado) — Windows / PowerShell
+
+> Si **ya ejecutaste el proyecto antes** (dependencias instaladas: `venv` del backend y
+> `node_modules` del frontend), solo necesitas volver a levantar los dos servicios.
+> Abre **dos terminales** en la raíz del proyecto (`seecontrol`).
+
+**1) Backend** (FastAPI · http://127.0.0.1:8000 · SQLite por defecto, `USE_SQLITE=true`):
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+**2) Frontend** (Vite · http://127.0.0.1:5173):
+
+```powershell
+cd frontend
+npm run dev
+# alternativa sin npm (si la política de scripts bloquea npm/npx):
+# node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173
+```
+
+Luego abre **http://127.0.0.1:5173**. Como el backend ya trae proveedores LLM en
+`backend/.env`, la app arranca directamente en **modo PRODUCCIÓN** (el selector DEMO
+se oculta solo cuando detecta al menos un proveedor) y los agentes son funcionales.
+
+- Usuario demo: `admin@seecontrol.io` / `admin123`.
+- API Docs: http://127.0.0.1:8000/docs
+- Para apagar los servicios: `Ctrl + C` en cada terminal (o cerrar las ventanas).
+- ¿Puerto ocupado? Libera 8000/5173 antes de arrancar:
+  ```powershell
+  foreach ($p in 8000,5173) { Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -Expand OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force } }
+  ```
+
+> **Primera vez / sin dependencias instaladas:** sigue la [Instalación Completa](#-instalación-completa)
+> más abajo (crear `venv`, `pip install -r requirements.txt`, `npm install`).
+
 ## ✅ Setup verificado en Windows (Oct 2026)
 
-Backend en **PostgreSQL real** + frontend plataforma completa (Studio/Chat, Oficina en vivo,
-Kanban, Fatiga de tokens, BYOK Global+Asia). Servicios esperados arriba:
+Plataforma completa (Studio/Chat, Oficina en vivo, Kanban, proyectos y entregables,
+Fatiga de tokens, BYOK multi-proveedor). Por defecto el backend usa **SQLite local**
+(`USE_SQLITE=true` en `backend/.env`, archivo `backend/seecontrol.db`); opcionalmente
+PostgreSQL con `USE_SQLITE=false`. Servicios esperados arriba:
 
 | Servicio | URL / puerto |
 |---|---|
 | API + Docs | http://127.0.0.1:8000/docs |
 | Frontend | http://127.0.0.1:5173 |
-| PostgreSQL | localhost:5432 (BD `seecontrol`, usuario `seecontrol`) |
+| Base de datos | SQLite (`backend/seecontrol.db`) o PostgreSQL `localhost:5432` |
 
 ```powershell
-# 1. PostgreSQL (cluster local en C:\Users\<tu>\pgdata)
+# (Opcional) PostgreSQL — solo si pones USE_SQLITE=false en backend/.env
 & 'C:\Program Files\PostgreSQL\16\bin\pg_ctl.exe' -D "$env:USERPROFILE\pgdata" -l "$env:USERPROFILE\pgdata\logfile.log" start
 
-# 2. Backend (crea las 8 tablas solo con arrancar)
-cd seecontrol-main\backend
+# Backend (crea las tablas solo con arrancar)
+cd backend
 .\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-# USE_SQLITE=false en backend/.env = Postgres. Para volver a SQLite: USE_SQLITE=true
 
-# 3. Frontend
+# Frontend
 cd ..\frontend
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev
 ```
 
 Usuario demo: `admin@seecontrol.io` / `admin123` (rol owner). Login por formulario

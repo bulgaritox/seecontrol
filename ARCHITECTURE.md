@@ -44,7 +44,8 @@ Usuario ─▶ Frontend (React+Vite, :5173)
 
 | Concepto | Backend (fuente de verdad) | Frontend (consumo) |
 |---|---|---|
-| Estado vivo de agentes/tareas | `GET /api/agents/`, `GET /api/tasks/` | `useLiveOffice.ts` (sync inicial + polling 6s en modo PROD + `refreshTasksFromBackend` tras una misión) |
+| Estado vivo de agentes/tareas | `GET /api/agents/`, `GET /api/tasks/` | `useLiveOffice.ts` (sync inicial + polling 6s en PROD + polling ligero de tareas en DEMO + `refreshTasksFromBackend` tras una misión) |
+| Detección de proveedor → modo | `GET /api/agents/providers` | `useLiveOffice.ts` `providersReady`: si hay ≥1 habilitado fuerza `mode='prod'`; `App.tsx` oculta el selector DEMO |
 | Chat / ping a un agente | `POST /api/agents/{id}/ping` → `llm_service.chat_effective()` | `api.ts pingAgent()` usado por `sendAgentMessage`, `followUpDoc`, y `sendChat` (ruta no-código) |
 | **Orquestación/Delegación** | `POST /api/agents/orchestrate/code` → `delegation_service.generate_code()` | `api.ts orchestrateCode()` usado por `sendChat` (ruta código) |
 | **Agrupación por proyecto** | columnas `project_id/project_name/project_brief/role_label` en `tasks` | `useLiveOffice` mapea a `projectId/projectName/projectBrief/roleLabel`; Kanban y Oficina agrupan por `projectId` |
@@ -118,15 +119,29 @@ El selector de proveedor/modelo del `StudioPanel` viaja en el POST (`provider`/`
 viene, **se impone** al provider/model configurado en cada agente para esa misión
 (`_resolve_model`). Si no viene, cada agente usa el suyo (reparte carga entre proveedores).
 
-### 3.4 Detección de intención (frontend)
+### 3.4 Detección de intención y destinatario (frontend)
 
-`sendChat` en `useLiveOffice.ts` decide la ruta con un regex `isCode` (html, css, js, landing,
-tailwind, componente, dashboard, formulario, servicios, etc.):
+`sendChat` en `useLiveOffice.ts` decide **a quién** y **por qué ruta** ejecutar:
+
+1. **Destinatario (mención de agente).** Si el texto nombra a un agente activo distinto de
+   Boss (`@scout`, "dile a scout", "que scout…"), **ese agente** pasa a ser el ejecutor
+   (`orch = mentioned`) y responde él mismo con `pingAgent()`. Así se respeta la delegación
+   pedida y **no** se fuerza el flujo Pixel/Max.
+2. **Intención de investigación** (`isResearch`): verbos como investiga/compara/análisis/
+   "qué es mejor"/"tabla comparativa"/pros y contras → tiene **prioridad** sobre "código"
+   (evita que "compara servicios de backend" dispare el flujo HTML/CSS/JS).
+3. **Código** (`isCode`): solo si el ejecutor es **Boss**, no es investigación, hay un
+   sustantivo claramente front-end (html/css/js/landing/dashboard/componente/…) **y** un verbo
+   de crear (crea/genera/diseña/…) o la palabra "landing".
+
+Rutas resultantes:
 - **código** → `orchestrateCode()` (delegación real; el backend crea las tareas del proyecto).
-- **no-código** → `pingAgent()` con presupuesto amplio (boss responde solo).
+  No se crea placeholder local (lo crea el backend como "Misión"), evitando duplicados.
+- **no-código / investigación / agente nombrado** → `pingAgent()` sobre el `backendId` del
+  ejecutor (una sola llamada LLM, más robusta).
 
-En la ruta código **no** se crea placeholder local (lo crea el backend como "Misión"),
-evitando tareas duplicadas o "sueltas".
+**Manejo de errores:** si la ruta falla, el `catch` muestra el **mensaje real** del error en el
+feed y el chat (ya no un genérico "red local") y marca la tarea como `blocked`.
 
 ---
 
@@ -312,12 +327,15 @@ frontend/src/
 ├── main.tsx                ← monta <BrowserRouter><App/>
 ├── App.tsx                 ← layout + RUTAS + overlays (AgentEditor, TaskDrawer, DocViewer,
 │                             AgentChatDock); deriva OfficeProject[] desde tasks por projectId;
-│                             handler de descarga de entregable en la oficina
+│                             handler de descarga de entregable; oculta selector DEMO si
+│                             providersReady (muestra "🏭 PRODUCCIÓN · agentes reales")
 ├── api.ts                  ← cliente REST + WS; interfaces Backend*; pingAgent, orchestrateCode,
 │                             importSkillFromUrl, deleteTask/deleteProjectTasks, credenciales…
 ├── hooks/
 │   ├── useLiveOffice.ts    ← ★ EL CEREBRO: estado de agentes/tareas/docs/chats; sync+polling;
-│   │                         sendChat (ruta código→orchestrateCode / no-código→pingAgent),
+│   │                         providersReady (auto-PROD al detectar proveedor);
+│   │                         sendChat (destinatario por mención + isResearch/isCode:
+│   │                           código→orchestrateCode / resto→pingAgent),
 │   │                         sendAgentMessage, followUpDoc, refreshTasksFromBackend,
 │   │                         removeTask, removeProject
 │   └── useProviders.ts     ← catálogo de proveedores/modelos del backend (con fallback local)
@@ -352,13 +370,21 @@ frontend/src/
 ---
 
 ## 10. Modos DEMO vs PROD (frontend)
-- **DEMO**: motor de simulación local (los agentes se mueven y "trabajan" solos). El sync
-  inicial con backend sí corre una vez; la simulación solo anima las tareas existentes.
-- **PROD**: refleja el backend real; polling cada 6s de `/api/agents/` y `/api/tasks/`.
-  Para ver ejecución real de modelos y proyectos, usar PROD.
 
-El modo se guarda en `localStorage` (`sc_mode`). Tras una misión, `refreshTasksFromBackend()`
-trae las subtareas reales ya agrupadas por proyecto (en ambos modos).
+- **Auto-PROD por detección de proveedor.** `useLiveOffice` consulta `GET /api/agents/providers`;
+  si hay **≥1 proveedor habilitado**, expone `providersReady=true`, **fuerza `mode='prod'`** y
+  en `App.tsx` el **selector DEMO/PROD se oculta** (se muestra "🏭 PRODUCCIÓN · agentes reales").
+  Es decir: en cuanto el backend tiene una credencial, el usuario ya no elige modo y los agentes
+  son reales. Reintenta cada 6s hasta que el backend responda.
+- **DEMO** (solo si aún no hay proveedor detectado): motor de simulación local (los agentes se
+  mueven y "trabajan" solos). Además, un **polling ligero de tareas** (cada 6s, solo en demo)
+  trae los PROYECTOS reales del backend para que aparezcan sin recargar.
+- **PROD**: refleja el backend real; polling cada 6s de `/api/agents/` y `/api/tasks/`. El poll
+  **no pisa** a un agente que el usuario acaba de poner a ejecutar (`trip==='table'`), para
+  evitar el parpadeo ("da vueltas") mientras corre `sendChat`.
+
+El modo se guarda en `localStorage` (`sc_mode`), pero `providersReady` lo sobreescribe a `prod`.
+Tras una misión, `refreshTasksFromBackend()` trae las subtareas reales ya agrupadas por proyecto.
 
 > **Nota de caché:** si tras cambios del frontend no se ven los proyectos, suele ser un bundle
 > viejo. Reiniciar `npm run dev` y hacer recarga dura (Ctrl+Shift+R) o abrir en incógnito.
@@ -387,6 +413,10 @@ trae las subtareas reales ya agrupadas por proyecto (en ambos modos).
 4. ¿Delegación/artefactos/proyectos? → §7.7 (delegation + artifacts + task + front views).
 5. ¿Nuevo endpoint? → §7.6 (router → main.py → api.ts; rutas específicas antes de `/{id}`).
 6. ¿Skills? → §5 (`/import` antes de `/{skill_id}`; `_skill_guidance` para que se "usen").
-7. Reiniciar uvicorn si tocaste `.env`, `settings.py`, `llm.py`, `seed.py`, `delegation.py` o
+7. ¿Ruta/destinatario de una petición del Studio? → §3.4 (mención de agente, `isResearch`,
+   `isCode`). Si una petición cae en la ruta equivocada, ajustar esos regex en `sendChat`.
+8. ¿Modo/visibilidad DEMO? → §10 (`providersReady` fuerza PROD y oculta el selector al detectar
+   proveedor; el poll PROD respeta `trip` para no parpadear).
+9. Reiniciar uvicorn si tocaste `.env`, `settings.py`, `llm.py`, `seed.py`, `delegation.py` o
    un servicio. Verificar: `GET /health` OK y `GET /api/agents/` lista el ROSTER.
-8. Frontend: `npm run dev` + recarga dura si un cambio no se refleja (caché de bundle).
+10. Frontend: `npm run dev` + recarga dura si un cambio no se refleja (caché de bundle).

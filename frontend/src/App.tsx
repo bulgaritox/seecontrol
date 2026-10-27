@@ -44,7 +44,7 @@ export default function App() {
   const onProvidersRoute = location.pathname.startsWith('/proveedores')
   const live = useLiveOffice()
   const {
-    agents, tasks, docs, chat, backendOk, wsLive, version,
+    agents, tasks, docs, chat, backendOk, wsLive, version, providersReady,
     mode, setMode, sendChat, approveTask, taskControl, extendTask, pauseAgent, resumeAgent,
     saveAgent, saveLook, providerMeeting, togglePower, addAgent, removeAgent, setMood,
     followUpDoc, removeTask, removeProject,
@@ -91,23 +91,30 @@ export default function App() {
               {wsLive ? '📡 WS en vivo' : '📡 WS sim'}
             </span>
             {/* switch demo / producción */}
-            <span style={{ fontSize: 12, border: '1px solid #2A2A2A', borderRadius: 8, padding: 4, background: '#111', display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ color: '#78716C', paddingLeft: 6 }}>MODO</span>
-              {(['demo', 'prod'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  title={m === 'demo' ? 'Simulación local viva' : 'Solo backend + BYOK reales'}
-                  style={{
-                    fontSize: 9, fontFamily: GB, padding: '6px 10px', borderRadius: 6, cursor: 'pointer', border: 'none',
-                    background: mode === m ? (m === 'demo' ? '#78350A' : '#052E16') : 'transparent',
-                    color: mode === m ? (m === 'demo' ? '#FBBF24' : '#22C55E') : '#78716C',
-                  }}
-                >
-                  {m === 'demo' ? '🧪 DEMO' : '🏭 PROD'}
-                </button>
-              ))}
-            </span>
+            {/* Cuando hay un proveedor real detectado, se opera en PROD y se oculta el switch DEMO. */}
+            {providersReady ? (
+              <span title="Proveedor LLM detectado: agentes reales activos" style={{ fontSize: 9, fontFamily: GB, border: '1px solid #14532D', borderRadius: 8, padding: '7px 12px', background: '#052E16', color: '#22C55E' }}>
+                🏭 PRODUCCIÓN · agentes reales
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, border: '1px solid #2A2A2A', borderRadius: 8, padding: 4, background: '#111', display: 'flex', gap: 4, alignItems: 'center' }}>
+                <span style={{ color: '#78716C', paddingLeft: 6 }}>MODO</span>
+                {(['demo', 'prod'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    title={m === 'demo' ? 'Simulación local viva' : 'Solo backend + BYOK reales'}
+                    style={{
+                      fontSize: 9, fontFamily: GB, padding: '6px 10px', borderRadius: 6, cursor: 'pointer', border: 'none',
+                      background: mode === m ? (m === 'demo' ? '#78350A' : '#052E16') : 'transparent',
+                      color: mode === m ? (m === 'demo' ? '#FBBF24' : '#22C55E') : '#78716C',
+                    }}
+                  >
+                    {m === 'demo' ? '🧪 DEMO' : '🏭 PROD'}
+                  </button>
+                ))}
+              </span>
+            )}
             <nav style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
               {NAV.map(([to, label]) => (
                 <NavLink
